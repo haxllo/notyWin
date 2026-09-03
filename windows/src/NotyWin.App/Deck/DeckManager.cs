@@ -78,11 +78,8 @@ public sealed class DeckManager : IDisposable
             if (!_decks.ContainsKey(id) && displays.TryGetValue(id, out var disp))
             {
                 var controller = new DeckController(id, disp, s.ShowOverFullScreen);
-                controller.Notes = _notes;
-                controller.Settings = _settings;
-                controller.WireViewModel();
+                controller.Initialize(_notes, _settings, _notes.ActiveCount);
                 controller.Model.SyncPreferences(s);
-                controller.Model.NoteCount = _notes.ActiveCount;
                 _decks[id] = controller;
             }
             else if (displays.TryGetValue(id, out var existing))
@@ -102,8 +99,14 @@ public sealed class DeckManager : IDisposable
     private void OnNoteListChanged()
     {
         var n = _notes.ActiveCount;
-        foreach (var d in _decks.Values)
-            if (d.Model.NoteCount != n) d.Model.NoteCount = n;
+        foreach (var (id, d) in _decks)
+        {
+            if (d.Model.NoteCount != n)
+            {
+                d.Model.NoteCount = n;
+                d.ForceRelayout();
+            }
+        }
     }
 
     public void Dispose()

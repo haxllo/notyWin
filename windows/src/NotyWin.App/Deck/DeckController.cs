@@ -103,12 +103,26 @@ public sealed class DeckController : IDisposable
         Window.PointerMoved += (x, y) => OnPointerMoved(x, y);
         Window.LeftButtonDown += (x, y) => OnLeftButtonDown(x, y);
         Window.RightButtonDown += (x, y) => OnRightButtonDown(x, y);
+    }
 
-        // Size the panel first, then show. Showing before sizing leaves the
-        // window at its default 800x600 size and the resize doesn't take.
-        Relayout(display);
+    /// <summary>Called by DeckManager after construction to set Notes/Settings
+    /// and the initial NoteCount so the first Relayout sees the right value.</summary>
+    public void Initialize(NoteList notes, ISettingsStore settings, int noteCount)
+    {
+        Notes = notes;
+        Settings = settings;
+        Model.NoteCount = noteCount;
+        View.ViewModel = new DeckViewModel(notes, () => settings.Load());
+        View.OnRightEdge = !settings.Load().DeckOnLeftEdge;
+        View.Editor.Notes = notes;
+        View.Editor.OnRequestCollapse = () => OnCollapse();
+        // Resize the panel now that Notes/Settings/NoteCount are known.
+        Relayout(_display);
         Window.Show();
         StartPoll();
+        // Subscribe to note changes.
+        _notesSub?.Dispose();
+        _notesSub = notes.Subscribe(new NoteChangeObserver(this));
     }
 
     public void WireViewModel()
@@ -281,6 +295,9 @@ public sealed class DeckController : IDisposable
         _showOverFullScreen = overFullScreen;
         Window.ApplyLevel(overFullScreen);
     }
+
+    /// <summary>Force a relayout using the current display rect (for note-count changes).</summary>
+    public void ForceRelayout() => Relayout(_display);
 
     // MARK: - Input handlers — drive the state machine
 

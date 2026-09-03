@@ -72,12 +72,15 @@ public sealed class DeckView : UserControl
         _canvas.Invalidate();
     }
 
-    /// <summary>Re-render after a panel size change (DIPs). The canvas fills the
-    /// window, so only the tracked size and the cached frame change.</summary>
+    /// <summary>Re-render after a panel size change (DIPs). Sets the UserControl's
+    /// explicit Width/Height so the WinUI layout pass can't override our size
+    /// with the residual XAML default (800×600).</summary>
     public void Resize(double panelWidth, double panelHeight)
     {
         _panelW = panelWidth;
         _panelH = panelHeight;
+        Width = panelWidth;
+        Height = panelHeight;
         _frame = null;
         _canvas.Invalidate();
     }
@@ -154,13 +157,18 @@ public sealed class DeckView : UserControl
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (ViewModel is null) return;
-        // Always use the canvas's actual size — it's the ground truth after
-        // the WinUI 3 layout pass completes.
-        var w = sender.ActualWidth;
-        var h = sender.ActualHeight;
-        if (w <= 0 || h <= 0) return;
-        _panelW = w;
-        _panelH = h;
+        // Always use the tracked panel size from Resize(), not ActualWidth —
+        // the WinUI layout pass can report a stale value before our explicit
+        // Width/Height has propagated.
+        var w = _panelW;
+        var h = _panelH;
+        if (w <= 0 || h <= 0)
+        {
+            // First paint before any Resize() — fall back to sender's size.
+            w = sender.ActualWidth;
+            h = sender.ActualHeight;
+            if (w <= 0 || h <= 0) return;
+        }
         var now = Environment.TickCount / 1000.0;
         var frame = ViewModel.Render(h, w, LabelCacheSingleton.Get(), Reveal, now);
         _frame = frame;
