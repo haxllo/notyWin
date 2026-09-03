@@ -51,6 +51,11 @@ public sealed class DeckModel
 /// <summary>
 /// One-deck-per-display controller. Owns a <see cref="DeckStateMachine"/> and a
 /// <see cref="DeckWindow"/>; turns machine decisions into Win32 effects.
+///
+/// Pointer enter/exit comes from polling <see cref="DeckWindow.CursorPos"/>
+/// against the panel rect — the macOS app polls <c>NSEvent.mouseLocation</c>
+/// for the same reason: the panel's hit region changes shape on every state
+/// change, so event-driven enter/exit fires spuriously during resize.
 /// </summary>
 public sealed class DeckController : IDisposable
 {
@@ -63,9 +68,12 @@ public sealed class DeckController : IDisposable
     public DeckView? View { get; private set; }
 
     private System.Timers.Timer? _idleTimer;
+    private System.Timers.Timer? _pollTimer;
     private System.Threading.Timer? _exitWork;
+    private IDisposable? _notesSub;
     private DisplayRect _display;
     private bool _showOverFullScreen;
+    private bool _inside;
     private bool _disposed;
     private readonly DispatcherQueue _dispatcher;
 
@@ -84,34 +92,21 @@ public sealed class DeckController : IDisposable
         {
             OnRightEdge = !Model.OnLeftEdge,
         };
-        if (Notes is not null && Settings is not null)
-        {
-            View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
-            View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
-        }
-        // The XAML tree root is the DeckView itself; setting it as the
-        // window content is what wires the per-display HWND to the shared
-        // WindowsXamlManager. (Previously this went through
-        // DesktopWindowXamlSource, which collided with the main thread's
-        // WindowsXamlManager.)
         Window.Window.Content = View;
-        View.PointerEntered += () => OnPointerEntered();
-        View.PointerExited += () => OnPointerExited();
-        View.ItemPressed += (item, x, y) => OnItemPressed(item, x, y);
-        View.TabRightClicked += item => OnTabRightClicked(item);
+        Window.Window.Closed += (_, _) => DeckLog.Write("CTRL", $"deck window CLOSED display={DisplayId}");
 
-        // Raw Win32 pointer events. WinUI's managed pointer events don't
-        // fire on a non-foreground borderless window, so we hook the
-        // underlying HWND directly and drive the state machine from the
-        // raw messages.
-        Window.PointerMoved += (x, y) => OnRawPointerMoved(x, y);
-        Window.PointerExited += () => OnPointerExited();
-        Window.RightButtonDown += (x, y) => OnRawRightDown(x, y);
+        // Blank panel regions are click-through (HTTRANSPARENT); anything
+        // over a drawn item takes the click.
+        Window.InteractiveFilter = (x, y) => View.HitAt(x, y) is not null;
+        Window.PointerMoved += (x, y) => OnPointerMoved(x, y);
+        Window.LeftButtonDown += (x, y) => OnLeftButtonDown(x, y);
+        Window.RightButtonDown += (x, y) => OnRightButtonDown(x, y);
 
         // Size the panel first, then show. Showing before sizing leaves the
         // window at its default 800x600 size and the resize doesn't take.
         Relayout(display);
         Window.Show();
+        StartPoll();
     }
 
     public void WireViewModel()
@@ -120,44 +115,142 @@ public sealed class DeckController : IDisposable
         {
             View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
             View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
-            Log($"WireViewModel: notes={Notes.ActiveCount} items");
+
+            // The editor mutates the shared NoteList directly (like the macOS
+            // view calls NoteStore.shared) and asks us to collapse on close.
+            View.Editor.Notes = Notes;
+            View.Editor.OnRequestCollapse = () => OnCollapse();
+
+            // Repaint tabs and re-sync the editor whenever a note changes.
+            _notesSub?.Dispose();
+            _notesSub = Notes.Subscribe(new NoteChangeObserver(this));
+
+            DeckLog.Write("CTRL", $"WireViewModel notes={Notes.ActiveCount}");
         }
     }
 
-    private void OnRawPointerMoved(double x, double y)
+    private void OnNotesChanged()
     {
-        // The pointer is over the window. Tell the state machine we entered
-        // (idempotent — same as DeckView.PointerEntered).
-        OnPointerEntered();
+        if (_disposed || View is null) return;
+        View.Refresh();
+        SyncEditorIfExpanded();
+    }
 
-        // Hit-test against the live paint frame to drive hover state.
-        if (View?.ViewModel is null) return;
-        var w = Window.AppWindow.Size.Width;
-        var h = Window.AppWindow.Size.Height;
-        if (View is null) return;
-        var frame = View.GetOrComputeFrame(w, h);
-        var hit = HitTest.Test(x, y, frame, w, !Model.OnLeftEdge);
-        if (View.Reveal.HoverTabId != hit?.Item.Note?.Id)
+    private sealed class NoteChangeObserver : IObserver<NoteList>
+    {
+        private readonly DeckController _c;
+        public NoteChangeObserver(DeckController c) { _c = c; }
+        public void OnNext(NoteList value) => _c.OnNotesChanged();
+        public void OnCompleted() { }
+        public void OnError(Exception error) { }
+    }
+
+    // MARK: - Pointer
+
+    private void OnPointerMoved(double x, double y)
+    {
+        var hit = View?.HitAt(x, y);
+        var id = hit?.Item.Note?.Id;
+        if (View is not null && View.Reveal.HoverTabId != id)
         {
-            View.Reveal.HoverTabId = hit?.Item.Note?.Id;
+            View.Reveal.HoverTabId = id;
             View.Refresh();
         }
     }
 
-    private void OnRawRightDown(double x, double y)
+    private void OnLeftButtonDown(double x, double y)
     {
-        // Mirror the WinUI RightTapped path: hit-test, find the tab, show
-        // context menu.
-        if (View?.ViewModel is null) return;
-        var w = Window.AppWindow.Size.Width;
-        var h = Window.AppWindow.Size.Height;
-        var frame = View.GetOrComputeFrame(w, h);
-        var hit = HitTest.Test(x, y, frame, w, !Model.OnLeftEdge);
-        if (hit is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } tabHit)
-            OnTabRightClicked(tabHit.Item);
+        if (View?.HitAt(x, y) is { } hit)
+            OnItemPressed(hit.Item, x, y);
     }
 
+    private void OnRightButtonDown(double x, double y)
+    {
+        if (View?.HitAt(x, y) is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } hit)
+            OnTabRightClicked(hit.Item);
+    }
+
+    // MARK: - Enter/exit poll
+
+    private void StartPoll()
+    {
+        _pollTimer = new System.Timers.Timer(40) { AutoReset = true };
+        _pollTimer.Elapsed += (_, _) => _dispatcher.TryEnqueue(PollTick);
+        _pollTimer.Start();
+    }
+
+    private void PollTick()
+    {
+        if (_disposed) return;
+        try
+        {
+            PollTickCore();
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"PollTick EX {ex}");
+        }
+    }
+
+    private void PollTickCore()
+    {
+        var (cx, cy) = DeckWindow.CursorPos();
+        var r = Window.ScreenRect();
+        var inside = cx >= r.Left && cx < r.Right && cy >= r.Top && cy < r.Bottom;
+
+        if (inside)
+        {
+            CancelExitWork();
+            if (!_inside)
+            {
+                _inside = true;
+                OnPointerEntered();
+            }
+            return;
+        }
+
+        if (!_inside) return;
+
+        // Left the panel: debounce, then confirm against the hot zone before
+        // folding — the same 0.15 s re-check the macOS app does.
+        if (_exitWork is not null) return;
+        _exitWork = new System.Threading.Timer(_ => _dispatcher.TryEnqueue(() =>
+        {
+            CancelExitWork();
+            var (px, py) = DeckWindow.CursorPos();
+            var rect = Window.ScreenRect();
+            var zone = HotZone.ForPanel(
+                new PanelFrame(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top),
+                Model.OnLeftEdge);
+            if (!zone.Contains(px, py))
+            {
+                _inside = false;
+                OnPointerExited();
+            }
+        }), null, 150, System.Threading.Timeout.Infinite);
+    }
+
+    private void CancelExitWork()
+    {
+        _exitWork?.Dispose();
+        _exitWork = null;
+    }
+
+    // MARK: - Layout
+
     public void Relayout(DisplayRect display)
+    {
+        try
+        {
+            RelayoutCore(display);
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"Relayout EX {ex}");
+        }
+    }
+
+    private void RelayoutCore(DisplayRect display)
     {
         _display = display;
         DeckGeom.Scale = Model.DeckScale;
@@ -168,7 +261,9 @@ public sealed class DeckController : IDisposable
             Math.Max(1, Model.NoteCount), Model.NoteWidth,
             Model.EdgeWidth, Model.DeckYRatio);
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
-        View?.Resize(frame.Width, frame.Height);
+
+        var s = Window.DpiScale;
+        View?.Resize(frame.Width / s, frame.Height / s);
 
         // Rest = pill IS visible. The window is the detection strip.
         if (StateMachine.State == DeckState.Rest)
@@ -191,25 +286,8 @@ public sealed class DeckController : IDisposable
 
     public void OnPointerExited()
     {
-        _exitWork?.Dispose();
-        _exitWork = new System.Threading.Timer(_ =>
-        {
-            _dispatcher.TryEnqueue(() =>
-            {
-                var d = StateMachine.Process(DeckInput.PointerExitedHotZone, Seconds());
-                Apply(d);
-            });
-        }, null, 150, System.Threading.Timeout.Infinite);
-    }
-
-    public void OnPointerMoved(double x, double y)
-    {
-        if (StateMachine.State != DeckState.Fan) return;
-        if (StateMachine.IsDragging) return;
-        var zone = HotZone.ForPanel(new PanelFrame(_display.FullLeft, _display.VisTop, 0, 0), Model.OnLeftEdge);
-        // Real hot zone is for the current panel; just check proximity to the
-        // relevant edge strip. The host can refine to a PanelFrame if needed.
-        _ = zone;
+        var d = StateMachine.Process(DeckInput.PointerExitedHotZone, Seconds());
+        Apply(d);
     }
 
     public void OnExpand(string noteId)
@@ -285,7 +363,7 @@ public sealed class DeckController : IDisposable
                 break;
             case RenderItemKind.MoreTab:
             case RenderItemKind.CogButton:
-                // Library / Settings — step 6.
+                // Library / Settings — step 9.
                 break;
         }
     }
@@ -294,19 +372,16 @@ public sealed class DeckController : IDisposable
 
     private void Apply(DeckDecision decision)
     {
+        var prev = StateMachine.State;
         StateMachine.State = decision.Next;
-        var effectNames = string.Join(",", decision.Effects.Select(e => e.ToString()));
-        Log($"Apply: state={decision.Next} effects=[{effectNames}]");
+        DeckLog.Write("CTRL", $"Apply state={decision.Next} effects=[{string.Join(",", decision.Effects)}]");
 
-        if (decision.Next != DeckState.Expanded && View is not null)
+        var expanded = decision.Next == DeckState.Expanded;
+        if (!expanded && View is not null)
             View.Reveal.ExpandedNoteId = null;
 
-        // Cancel any pending deferred work.
         if (Has(decision, DeckEffect.CancelExitWork))
-        {
-            _exitWork?.Dispose();
-            _exitWork = null;
-        }
+            CancelExitWork();
 
         // The "Hide" effect from the state machine is ignored on Windows.
         // macOS hides the panel because the user can re-trigger it from the
@@ -322,20 +397,39 @@ public sealed class DeckController : IDisposable
 
         if (Has(decision, DeckEffect.StartIdleWatch)) StartIdleWatch();
         if (Has(decision, DeckEffect.StopIdleWatch)) StopIdleWatch();
+
+        // Only an open note takes the keyboard; the deck is non-activating the
+        // rest of the time so hovering or clicking it never steals focus. On the
+        // transition into Expanded, make the just-clicked panel key so the
+        // editor's TextBox can receive input.
+        Window.SetAcceptsActivation(expanded);
+        if (expanded && prev != DeckState.Expanded)
+            Window.ActivateForInput();
+
         View?.Refresh();
+        SyncEditorIfExpanded();
+    }
+
+    /// <summary>Show the XAML editor over the expanded note's rect, or hide it
+    /// (flushing pending edits) when no note is open.</summary>
+    private void SyncEditorIfExpanded()
+    {
+        if (View is null) return;
+        var onRight = !Model.OnLeftEdge;
+        if (StateMachine.State == DeckState.Expanded &&
+            ExpandedNoteId is { } id && Notes?.ById(id) is { } note)
+        {
+            View.SyncEditor(note, onRight, Model.NoteFontSize);
+        }
+        else
+        {
+            View.SyncEditor(null, onRight, Model.NoteFontSize);
+        }
     }
 
     private static bool Has(DeckDecision d, DeckEffect effect) => d.Effects.Contains(effect);
 
     private static double Seconds() => Environment.TickCount / 1000.0;
-
-    private static void Log(string msg)
-    {
-        System.IO.File.AppendAllText(
-            System.IO.Path.Combine(System.Environment.GetFolderPath(
-                System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
-            $"[{DateTime.UtcNow:O}] CTRL: {msg}\n");
-    }
 
     // MARK: - Idle watch
 
@@ -367,10 +461,14 @@ public sealed class DeckController : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _exitWork?.Dispose();
-        _exitWork = null;
+        CancelExitWork();
         StopIdleWatch();
+        _notesSub?.Dispose();
+        _notesSub = null;
+        _pollTimer?.Stop();
+        _pollTimer?.Dispose();
+        _pollTimer = null;
         Window.Hide();
-        Window.Window.Close();
+        Window.Dispose();
     }
 }

@@ -375,7 +375,86 @@ minimum scaffolding so `dotnet run` shows the per-display deck HWNDs.
 - **Updated test** `FanAndExpanded_SamePanelSize` →
   `FanPanel_IsNarrowerThanExpanded` to reflect the narrower fan.
 
-### Step 6f — continued
+### Step 6f — Deck input + rendering, off the helper HWND
+
+Superseded deviation #13. The `WS_EX_TRANSPARENT` helper HWND worked for
+detection but swallowed every click in an 80 px full-height strip and only
+ever existed on the primary monitor, so it was removed.
+
+- **Subclass the deck HWND itself** (`SetWindowSubclass`) instead of a
+  helper. `WM_NCHITTEST` answers `HTCLIENT` over a drawn item
+  (`InteractiveFilter` → `View.HitAt`) and `HTTRANSPARENT` elsewhere, so
+  clicks on blank panel fall through to the app underneath — the Win32
+  equivalent of the macOS `hitTest`-returns-nil behaviour. `WM_MOUSEMOVE`
+  / `WM_LBUTTONDOWN` / `WM_RBUTTONDOWN` are forwarded to the controller,
+  then passed on to `DefSubclassProc` so the XAML island still sees them.
+- **Pointer enter/exit by polling** `GetCursorPos` on a 40 ms timer. On
+  leaving the panel a 150 ms debounced re-check against
+  `HotZone.ForPanel` confirms the cursor is really outside the hot zone
+  before folding — the same approach the macOS app takes with
+  `NSEvent.mouseLocation`, because the hit region changes shape on every
+  state change and event-driven enter/exit fires spuriously mid-resize.
+- **Non-activating while closed.** `WS_EX_NOACTIVATE` is set at
+  construction; `SetAcceptsActivation(bool)` clears it for the editor.
+- **Pill/fan gating fixed** in `DeckViewModel.Render`: `fanVisible =
+  panelHeight > lay.StackHeight` (dropped a leftover `|| true` debug
+  override), the pill item is emitted only when `!fanVisible`, and
+  `PillVisible`/`FanVisible` are returned accordingly — the fan replaces
+  the pill exactly as the SwiftUI ZStack swaps `PillView` for `FanColumn`.
+- **`DeckLog`** (gated by `NOTY_DEBUG_DECK=1`) appends to
+  `%LocalAppData%\Noty\deck.log`; `PollTick`/`Relayout` are wrapped so a
+  throw is logged rather than taking the process down.
+- **Tests**: split the empty-deck test into rest vs fan variants and
+  render the pill assertions at `RestHeight(n)`; removed the empty
+  `NotyWin.Geometry.Tests/UnitTest1.cs` stub. 114/114 still pass.
+
+### Step 7 — Note editor (real text input + autosave)
+
+The open note is now a real editable surface. Win2D cannot take keyboard
+input, so the sheet is XAML overlaid on the deck canvas, mirroring
+`NoteEditorView` in `Sources/NoteEditor.swift`.
+
+- **New `NotyWin.App/Deck/NoteEditorControl.cs`** (`UserControl`):
+  - **Sheet** — paper `Border` rounded on the deck-facing side and square
+    toward the screen edge (`CornerRadius(14,0,0,14)` on the right), a
+    header (derived title, "saved Xs ago", pin toggle), a borderless
+    transparent multi-line `TextBox` body (spellcheck on, ink foreground,
+    font size from settings), and a footer (8 colour swatches +
+    Archive / Delete / Close).
+  - **Autosave** — a 250 ms `DispatcherQueueTimer` debounce after typing
+    stops commits via `NoteList.UpdateBody`; `Flush()` commits immediately
+    on collapse or note-switch. Matches macOS `scheduleSave`/`flush`.
+  - **`SetNote`** reloads the body only when the note id changes, so a
+    re-sync never disturbs the caret or undo buffer; `RefreshHeader`
+    updates title / saved-label / pin cheaply on each autosave without
+    rebuilding the whole sheet.
+- **`DeckView` restructured** into a `Grid`: the `CanvasControl` now
+  *stretches* to the window (the explicit `Width`/`Height` assignment was
+  dropped — it fought the layout pass on resize), and an overlay `Canvas`
+  carries the editor. `_panelW`/`_panelH` (set by `Resize`) are the single
+  source for both layout and hit-testing. `SyncEditor(note, onRight,
+  fontSize)` positions and shows the editor from the frame's
+  `ExpandedNote` item, or hides it and flushes pending edits on `null`.
+- **`DeckPainter`**: removed the `PaintExpanded` placeholder. The
+  `ExpandedNote` item stays in the frame (so its rect is hit-testable and
+  clicks reach the XAML editor) but is no longer painted.
+- **`DeckController`**: wires `View.Editor.Notes` + `OnRequestCollapse`,
+  and subscribes to the `NoteList` so tabs repaint and the editor re-syncs
+  on any mutation. `Apply()` now toggles `SetAcceptsActivation(expanded)`
+  and, on the transition into `Expanded`, calls `ActivateForInput()`
+  (`SetForegroundWindow`) so the `TextBox` can take the keyboard, then
+  `SyncEditorIfExpanded()`.
+- **Persistence fix**: `PersistOnChange` now diffs known ids and deletes
+  removed notes from SQLite (deleted notes previously lingered in the
+  database); undo re-adds and re-upserts.
+- **Deviation — focus/activation**: macOS keeps the panel non-activating
+  and calls `makeFirstResponder` inside it. Win32 cannot give keyboard
+  focus to a `WS_EX_NOACTIVATE` window, so opening a note clears that
+  style and foregrounds the panel; closing restores it. Hovering and
+  clicking the closed deck still never steal focus.
+
+Build 0 errors; tests 114/114. Editor is UI-only (no unit coverage);
+verified by build + test per the current workflow.
 
 ## Gaps (step 6b+ work)
 

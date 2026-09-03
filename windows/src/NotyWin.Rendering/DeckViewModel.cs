@@ -101,7 +101,9 @@ public sealed class DeckViewModel
         var lay = DeckGeom.Layout(panelHeight, itemCount, hidden > 0, s.DeckStyle, longest);
 
         var items = new List<RenderItem>();
-        var fanVisible = panelHeight > lay.StackHeight || true;   // SwiftUI shows fan whenever not .rest
+        // SwiftUI shows the fan whenever the state is not .rest; at rest the
+        // panel is only as tall as the pill, so the stack never fits.
+        var fanVisible = panelHeight > lay.StackHeight;
         // Pill placement: same formula as macOS, expressed in top-down coords.
         var pillCount = Math.Max(1, Notes.ActiveCount);
         var pillH = DeckGeom.PillHeight(pillCount);
@@ -122,22 +124,26 @@ public sealed class DeckViewModel
             AddFooterButtons(items, visible.Count, lay, s, panelWidth, fanTop, reveal);
         }
 
-        // Pill is always drawn at the same screen position it occupies at rest.
-        var pillColors = Notes.Active
-            .Take(DeckGeom.MaxDashes)
-            .Select(n => n.Palette.DashArgb)
-            .ToList();
-        items.Add(new RenderItem
+        // The pill only exists at rest — the fan replaces it, exactly as the
+        // SwiftUI ZStack swaps PillView for FanColumn.
+        if (!fanVisible)
         {
-            Kind = RenderItemKind.Pill,
-            X = onRight ? panelWidth - DeckGeom.PillWidth : 0,
-            Y = pillTopY,
-            Width = DeckGeom.PillWidth,
-            Height = pillH,
-            RevealProgress = reveal.PillProgress,
-            DashColors = pillColors,
-            PillOverflow = Notes.ActiveCount > DeckGeom.MaxDashes,
-        });
+            var pillColors = Notes.Active
+                .Take(DeckGeom.MaxDashes)
+                .Select(n => n.Palette.DashArgb)
+                .ToList();
+            items.Add(new RenderItem
+            {
+                Kind = RenderItemKind.Pill,
+                X = onRight ? panelWidth - DeckGeom.PillWidth : 0,
+                Y = pillTopY,
+                Width = DeckGeom.PillWidth,
+                Height = pillH,
+                RevealProgress = reveal.PillProgress,
+                DashColors = pillColors,
+                PillOverflow = Notes.ActiveCount > DeckGeom.MaxDashes,
+            });
+        }
 
         // Edge spine (the dashed rule on the screen-edge side).
         items.Add(new RenderItem
@@ -190,7 +196,7 @@ public sealed class DeckViewModel
         return new DeckFrame
         {
             Items = items,
-            PillVisible = true,
+            PillVisible = !fanVisible,
             FanVisible = fanVisible,
             ShowExpanded = reveal.ExpandedNoteId is not null,
         };

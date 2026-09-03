@@ -99,6 +99,7 @@ public partial class App : Application
                     Log("Deferred phase: constructing MainWindow");
                     Window = new MainWindow();
                     Log("MainWindow constructed");
+                    Window.Closed += (_, _) => Log("MainWindow CLOSED");
                     Window.Activate();
                     // Send the MainWindow to the back so it doesn't sit on top
                     // of the deck. We still want it visible as a status panel.
@@ -150,11 +151,27 @@ public partial class App : Application
 internal sealed class PersistOnChange : IObserver<NoteList>
 {
     private readonly SqliteNotePersistence _store;
+    private readonly HashSet<string> _known = new();
+
     public PersistOnChange(SqliteNotePersistence store) { _store = store; }
+
     public void OnNext(NoteList value)
     {
-        foreach (var n in value.Notes) _store.Upsert(n);
+        var live = value.Notes;
+        var liveIds = new HashSet<string>(live.Count);
+        foreach (var n in live)
+        {
+            liveIds.Add(n.Id);
+            _store.Upsert(n);
+            _known.Add(n.Id);
+        }
+        // A note missing from the list was deleted (archived notes stay in it),
+        // so drop it from the database too. Undo re-adds and re-upserts it.
+        foreach (var gone in _known)
+            if (!liveIds.Contains(gone)) _store.Delete(gone);
+        _known.IntersectWith(liveIds);
     }
+
     public void OnCompleted() { }
     public void OnError(Exception error) { }
 }

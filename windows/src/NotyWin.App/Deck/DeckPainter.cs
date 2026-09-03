@@ -49,7 +49,10 @@ public sealed class DeckPainter
                 case RenderItemKind.CogButton: PaintCog(ds, ri); break;
                 case RenderItemKind.EdgeSpine: PaintSpine(ds, ri); break;
                 case RenderItemKind.NotePreview: PaintPreview(ds, ri); break;
-                case RenderItemKind.ExpandedNote: PaintExpanded(ds, ri); break;
+                // ExpandedNote is not painted: the open note is a real XAML
+                // editor (NoteEditorControl) overlaid on the canvas, since
+                // Win2D cannot take keyboard input. The item stays in the frame
+                // so its rect is hit-testable (HTCLIENT) and clicks reach it.
             }
         }
     }
@@ -254,45 +257,6 @@ public sealed class DeckPainter
             FontWeight = Weight.Bold,
         };
         ds.DrawText(n.DisplayTitle("Untitled"), (float)(r.X + 10), (float)(r.Y + 9), ink, titleFont);
-    }
-
-    // MARK: ExpandedNote (placeholder until the full editor ships)
-
-    private static void PaintExpanded(CanvasDrawingSession ds, RenderItem r)
-    {
-        var n = r.Note!;
-        var paper = ColorFromArgb(n.Palette.PaperArgb);
-        var ink = ColorFromArgb(n.Palette.InkArgb);
-        // Dashed gutter on the deck-facing side reads as growing from the deck.
-        var rect = new Rect(r.X, r.Y, r.Width, r.Height);
-        ds.FillRoundedRectangle(rect, 8, 8, paper);
-        ds.DrawRoundedRectangle(rect, 8, 8, Color.FromArgb(0x33, ink.R, ink.G, ink.B), 1);
-
-        var titleFont = new CanvasTextFormat
-        {
-            FontFamily = "Segoe UI",
-            FontSize = 13f,
-            FontWeight = Weight.SemiBold,
-        };
-        ds.DrawText(n.DisplayTitle("Untitled"), (float)(r.X + 14), (float)(r.Y + 14), ink, titleFont);
-
-        var bodyFont = new CanvasTextFormat
-        {
-            FontFamily = "Segoe UI",
-            FontSize = 11f,
-        };
-        var body = n.Body ?? "";
-        if (body.Length == 0)
-        {
-            ds.DrawText("(empty)", (float)(r.X + 14), (float)(r.Y + 40),
-                Color.FromArgb(0x66, ink.R, ink.G, ink.B), bodyFont);
-        }
-        else
-        {
-            var layout = new CanvasTextLayout(ds, body, bodyFont, (float)(r.Width - 28), (float)(r.Height - 60));
-            ds.DrawTextLayout(layout, (float)(r.X + 14), (float)(r.Y + 40),
-                Color.FromArgb(0xCC, ink.R, ink.G, ink.B));
-        }
     }
 
     // MARK: Paths

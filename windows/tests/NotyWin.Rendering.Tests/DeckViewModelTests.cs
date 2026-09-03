@@ -18,6 +18,9 @@ public class DeckViewModelTests
 
     private static SettingsSnapshot Defaults() => new();
 
+    /// <summary>Panel height at rest for a note count — the pill-only frame.</summary>
+    private static double RestHeight(int noteCount) => DeckGeom.PillHeight(Math.Max(1, noteCount));
+
     [Fact]
     public void VisibleActive_PrefixesFanLimit()
     {
@@ -50,16 +53,27 @@ public class DeckViewModelTests
     }
 
     [Fact]
-    public void Render_EmptyDeck_ProducesPillPlusEmptyTab()
+    public void Render_EmptyDeck_AtRest_ProducesPill()
+    {
+        var vm = new DeckViewModel(Empty(), () => Defaults());
+        var cache = new LabelWidthCache(new LabelWidthCacheTests_Stub());
+        var reveal = new RevealProgressTracker();
+        var frame = vm.Render(panelHeight: RestHeight(0), panelWidth: 360, cache, reveal);
+        Assert.Contains(frame.Items, i => i.Kind == RenderItemKind.Pill);
+        Assert.DoesNotContain(frame.Items, i => i.Kind == RenderItemKind.EmptyTab);
+    }
+
+    [Fact]
+    public void Render_EmptyDeck_Fanned_ProducesEmptyTabAndButtons()
     {
         var vm = new DeckViewModel(Empty(), () => Defaults());
         var cache = new LabelWidthCache(new LabelWidthCacheTests_Stub());
         var reveal = new RevealProgressTracker();
         var frame = vm.Render(panelHeight: 1080, panelWidth: 360, cache, reveal);
-        Assert.Contains(frame.Items, i => i.Kind == RenderItemKind.Pill);
         Assert.Contains(frame.Items, i => i.Kind == RenderItemKind.EmptyTab);
         Assert.Contains(frame.Items, i => i.Kind == RenderItemKind.PlusButton);
         Assert.Contains(frame.Items, i => i.Kind == RenderItemKind.CogButton);
+        Assert.DoesNotContain(frame.Items, i => i.Kind == RenderItemKind.Pill);
     }
 
     [Fact]
@@ -93,7 +107,7 @@ public class DeckViewModelTests
     public void Pill_DashColors_ArePerNotePalette()
     {
         var vm = new DeckViewModel(WithNotes(3), () => Defaults());
-        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
+        var frame = vm.Render(RestHeight(3), 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
             new RevealProgressTracker());
         var pill = frame.Items.First(i => i.Kind == RenderItemKind.Pill);
         Assert.NotNull(pill.DashColors);
@@ -105,7 +119,7 @@ public class DeckViewModelTests
     public void Pill_Overflow_WhenNotesExceedMaxDashes()
     {
         var vm = new DeckViewModel(WithNotes(DeckGeom.MaxDashes + 2), () => Defaults());
-        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
+        var frame = vm.Render(RestHeight(DeckGeom.MaxDashes + 2), 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
             new RevealProgressTracker());
         var pill = frame.Items.First(i => i.Kind == RenderItemKind.Pill);
         Assert.Equal(DeckGeom.MaxDashes, pill.DashColors!.Count);
@@ -160,7 +174,7 @@ public class DeckViewModelTests
     public void Render_PillXOnRightSide()
     {
         var vm = new DeckViewModel(WithNotes(3), () => Defaults());
-        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
+        var frame = vm.Render(RestHeight(3), 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
             new RevealProgressTracker());
         var pill = frame.Items.First(i => i.Kind == RenderItemKind.Pill);
         Assert.Equal(360 - DeckGeom.PillWidth, pill.X);
