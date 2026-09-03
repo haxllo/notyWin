@@ -118,6 +118,12 @@ public partial class App : Application
                     manager.RefreshDisplays();
                     Log($"RefreshDisplays: {manager.Decks.Count} decks");
 
+                    // Wire cog button on each deck to open settings.
+                    foreach (var d in manager.Decks.Values)
+                    {
+                        d.OnCogClicked = () => new SettingsWindow(settings, manager).Activate();
+                    }
+
                     notes.Subscribe(new PersistOnChange(persistence));
 
                     var undoToast = new UndoToast(notes, DispatcherQueue);
@@ -149,9 +155,10 @@ public partial class App : Application
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
-                    tray.OnAllNotes = () => { /* LibraryWindow — step 9 */ };
-                    tray.OnArchive = () => { /* LibraryWindow — step 9 */ };
-                    tray.OnSettings = () => { /* SettingsWindow — step 9 */ };
+                    tray.OnSettings = () =>
+                    {
+                        new SettingsWindow(settings, manager).Activate();
+                    };
                     tray.OnQuit = () =>
                     {
                         manager.Dispose();

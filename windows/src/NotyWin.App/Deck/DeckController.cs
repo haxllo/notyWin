@@ -349,6 +349,9 @@ public sealed class DeckController : IDisposable
     }
 
     /// <summary>Translate a paint-time hit into a state-machine command.</summary>
+    public Action? OnCogClicked { get; set; }
+    public Action? OnMoreClicked { get; set; }
+
     public void OnItemPressed(RenderItem item, double x, double y)
     {
         switch (item.Kind)
@@ -368,8 +371,10 @@ public sealed class DeckController : IDisposable
                 OnExpand(created.Id);
                 break;
             case RenderItemKind.MoreTab:
+                OnMoreClicked?.Invoke();
+                break;
             case RenderItemKind.CogButton:
-                // Library / Settings — step 9.
+                OnCogClicked?.Invoke();
                 break;
         }
     }
