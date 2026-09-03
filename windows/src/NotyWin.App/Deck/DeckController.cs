@@ -1,5 +1,7 @@
 using NotyWin.App.Geometry;
 using NotyWin.App.Models;
+using NotyWin.Rendering;
+using DeckFrame = NotyWin.App.Geometry.DeckFrame;
 
 namespace NotyWin.App.Deck;
 
@@ -54,6 +56,7 @@ public sealed class DeckController : IDisposable
     public DeckStateMachine StateMachine { get; } = new();
     public NoteList? Notes { get; set; }
     public ISettingsStore? Settings { get; set; }
+    public DeckView? View { get; private set; }
 
     private System.Timers.Timer? _idleTimer;
     private System.Threading.Timer? _exitWork;
@@ -70,6 +73,17 @@ public sealed class DeckController : IDisposable
         Window.ApplyLevel(showOverFullScreen);
         StateMachine.RestingState = Model.DeckAlwaysShown ? DeckState.Fan : DeckState.Rest;
         StateMachine.State = StateMachine.RestingState;
+
+        View = new DeckView
+        {
+            OnRightEdge = !Model.OnLeftEdge,
+        };
+        if (Notes is not null && Settings is not null)
+        {
+            View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
+            View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
+        }
+        Window.Host(View);
         Relayout(display);
         Window.Show();
     }
@@ -85,6 +99,7 @@ public sealed class DeckController : IDisposable
             Math.Max(1, Model.NoteCount), Model.NoteWidth,
             Model.EdgeWidth, Model.DeckYRatio);
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
+        View?.Resize(frame.Width, frame.Height);
 
         if (StateMachine.State == DeckState.Rest)
             Window.Hide();

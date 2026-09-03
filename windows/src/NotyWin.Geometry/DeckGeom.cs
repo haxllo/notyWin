@@ -65,6 +65,11 @@ public static class DeckGeom
 
     public static double MoreTabHeight => S(34);
 
+    /// <summary>Tab label text size, in points. Mirrors Ink.tabSize.</summary>
+    public static double TabSize() => S(9.5);
+    /// <summary>Tab label tracking, in points per character.</summary>
+    public static double TabTracking() => S(0.1);
+
     /// <summary>The deck may claim at most this much of the screen before tabs start shrinking.</summary>
     public const double HeightBudget = 0.68;
 

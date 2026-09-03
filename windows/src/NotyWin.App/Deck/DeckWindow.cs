@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
 
 namespace NotyWin.App.Deck;
 
@@ -18,6 +20,7 @@ public sealed class DeckWindow : IDisposable
     private static bool _registered;
 
     public nint Hwnd { get; private set; }
+    private DesktopWindowXamlSource? _xamlSource;
 
     public DeckWindow()
     {
@@ -30,6 +33,18 @@ public sealed class DeckWindow : IDisposable
             0, 0, 100, 100,
             IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
         SetLayeredAlpha(Hwnd, 255);
+    }
+
+    /// <summary>
+    /// Host a WinUI 3 <see cref="FrameworkElement"/> inside this HWND. Mirrors
+    /// NSHostingView on macOS. The XAML island is bound for the lifetime of the
+    /// window.
+    /// </summary>
+    public void Host(FrameworkElement element)
+    {
+        _xamlSource ??= new DesktopWindowXamlSource();
+        WinRT.Interop.InitializeWithWindow.Initialize(_xamlSource, Hwnd);
+        _xamlSource.Content = element;
     }
 
     public void ApplyLevel(bool overFullScreen)
@@ -57,6 +72,8 @@ public sealed class DeckWindow : IDisposable
             DestroyWindow(Hwnd);
             Hwnd = IntPtr.Zero;
         }
+        _xamlSource?.Dispose();
+        _xamlSource = null;
     }
 
     // P/Invoke

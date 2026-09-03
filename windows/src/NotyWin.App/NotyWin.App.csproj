@@ -49,6 +49,7 @@
     <PropertyGroup> above to opt out.
   -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
@@ -58,6 +59,7 @@
     <ProjectReference Include="..\NotyWin.Geometry\NotyWin.Geometry.csproj" />
     <ProjectReference Include="..\NotyWin.Models\NotyWin.Models.csproj" />
     <ProjectReference Include="..\NotyWin.Storage\NotyWin.Storage.csproj" />
+    <ProjectReference Include="..\NotyWin.Rendering\NotyWin.Rendering.csproj" />
   </ItemGroup>
 
   <!--
