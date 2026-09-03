@@ -88,7 +88,7 @@ public sealed class DeckViewModel
         return titles.Any() ? titles.Max(cache.Width) : 0;
     }
 
-    public DeckFrame Render(double panelHeight, double panelWidth, LabelWidthCache cache, RevealProgressTracker reveal)
+    public DeckFrame Render(double panelHeight, double panelWidth, LabelWidthCache cache, RevealProgressTracker reveal, double now = 0)
     {
         var s = Settings();
         DeckGeom.Scale = s.DeckScale;
@@ -116,12 +116,12 @@ public sealed class DeckViewModel
 
         if (fanVisible && visible.Count > 0)
         {
-            AddTabs(items, visible, lay, s, panelWidth, fanTop, reveal);
+            AddTabs(items, visible, lay, s, panelWidth, fanTop, reveal, now);
         }
         else if (fanVisible)
         {
-            AddEmptyTab(items, lay, s, panelWidth, fanTop, reveal);
-            AddFooterButtons(items, visible.Count, lay, s, panelWidth, fanTop, reveal);
+            AddEmptyTab(items, lay, s, panelWidth, fanTop, reveal, now);
+            AddFooterButtons(items, visible.Count, lay, s, panelWidth, fanTop, reveal, now);
         }
 
         // The pill only exists at rest — the fan replaces it, exactly as the
@@ -209,7 +209,8 @@ public sealed class DeckViewModel
         SettingsSnapshot s,
         double panelWidth,
         double fanTop,
-        RevealProgressTracker reveal)
+        RevealProgressTracker reveal,
+        double now)
     {
         var onRight = !s.DeckOnLeftEdge;
         var total = visible.Count + (ShowsMoreTab() ? 1 : 0) + 2;
@@ -220,7 +221,7 @@ public sealed class DeckViewModel
             var shift = reveal.DragTarget.HasValue ? reveal.ShiftY(i, lay.Pitch) : 0;
             var isOpen = reveal.ExpandedNoteId == n.Id;
             var lifted = reveal.DraggedNoteId == n.Id;
-            var stage = reveal.StageProgress(i, total);
+            var stage = reveal.StageProgress(i, total, now);
             var y = fanTop + i * lay.Pitch + (lifted ? reveal.DragDy : 0) + shift;
             items.Add(new RenderItem
             {
@@ -241,7 +242,7 @@ public sealed class DeckViewModel
 
         if (ShowsMoreTab())
         {
-            var stage = reveal.StageProgress(visible.Count, total);
+            var stage = reveal.StageProgress(visible.Count, total, now);
             items.Add(new RenderItem
             {
                 Kind = RenderItemKind.MoreTab,
@@ -254,17 +255,18 @@ public sealed class DeckViewModel
             });
         }
 
-        AddFooterButtons(items, visible.Count, lay, s, panelWidth, fanTop, reveal);
+        AddFooterButtons(items, visible.Count, lay, s, panelWidth, fanTop, reveal, now);
     }
 
     private void AddFooterButtons(
-        List<RenderItem> items,
-        int visibleCount,
-        DeckLayout lay,
-        SettingsSnapshot s,
-        double panelWidth,
-        double fanTop,
-        RevealProgressTracker reveal)
+    List<RenderItem> items,
+    int visibleCount,
+    DeckLayout lay,
+    SettingsSnapshot s,
+    double panelWidth,
+    double fanTop,
+    RevealProgressTracker reveal,
+    double now)
     {
         var onRight = !s.DeckOnLeftEdge;
         var showsMore = ShowsMoreTab();
@@ -278,7 +280,7 @@ public sealed class DeckViewModel
             Y = fanTop + visibleCount * lay.Pitch + DeckGeom.PlusGap - lay.Spacing + moreStackHeight,
             Width = DeckGeom.PlusSize,
             Height = DeckGeom.PlusSize,
-            RevealProgress = reveal.StageProgress(visibleCount + (showsMore ? 1 : 0), total),
+            RevealProgress = reveal.StageProgress(visibleCount + (showsMore ? 1 : 0), total, now),
         });
 
         items.Add(new RenderItem
@@ -289,11 +291,11 @@ public sealed class DeckViewModel
                 + DeckGeom.PlusSize + DeckGeom.CogGap + moreStackHeight,
             Width = DeckGeom.CogSize,
             Height = DeckGeom.CogSize,
-            RevealProgress = reveal.StageProgress(visibleCount + (showsMore ? 1 : 0) + 1, total),
+            RevealProgress = reveal.StageProgress(visibleCount + (showsMore ? 1 : 0) + 1, total, now),
         });
     }
 
-    private void AddEmptyTab(List<RenderItem> items, DeckLayout lay, SettingsSnapshot s, double panelWidth, double fanTop, RevealProgressTracker reveal)
+    private void AddEmptyTab(List<RenderItem> items, DeckLayout lay, SettingsSnapshot s, double panelWidth, double fanTop, RevealProgressTracker reveal, double now)
     {
         var onRight = !s.DeckOnLeftEdge;
         items.Add(new RenderItem
@@ -303,7 +305,7 @@ public sealed class DeckViewModel
             Y = fanTop,
             Width = DeckGeom.TabWidth,
             Height = lay.ItemHeight,
-            RevealProgress = reveal.StageProgress(0, 3),
+            RevealProgress = reveal.StageProgress(0, 3, now),
         });
     }
 }

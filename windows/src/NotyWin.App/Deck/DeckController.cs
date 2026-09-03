@@ -70,6 +70,8 @@ public sealed class DeckController : IDisposable
     private System.Timers.Timer? _idleTimer;
     private System.Timers.Timer? _pollTimer;
     private System.Threading.Timer? _exitWork;
+    private System.Timers.Timer? _animTimer;
+    private System.Timers.Timer? _hoverTimer;
     private IDisposable? _notesSub;
     private DisplayRect _display;
     private bool _showOverFullScreen;
@@ -155,6 +157,7 @@ public sealed class DeckController : IDisposable
         {
             View.Reveal.HoverTabId = id;
             View.Refresh();
+            ScheduleHoverAction(id);
         }
     }
 
@@ -395,6 +398,21 @@ public sealed class DeckController : IDisposable
             Relayout(_display);
         }
 
+        // Start stagger animation when entering Fan state.
+        if (Has(decision, DeckEffect.ShowFan) && View is not null)
+        {
+            View.Reveal.RevealStart = Seconds();
+            StartAnimTimer();
+        }
+
+        // Reset reveal when collapsing to pill.
+        if (Has(decision, DeckEffect.ShowPill) && View is not null)
+        {
+            View.Reveal.RevealStart = -1;
+            StopAnimTimer();
+            CancelHoverPreview();
+        }
+
         if (Has(decision, DeckEffect.StartIdleWatch)) StartIdleWatch();
         if (Has(decision, DeckEffect.StopIdleWatch)) StopIdleWatch();
 
@@ -405,6 +423,12 @@ public sealed class DeckController : IDisposable
         Window.SetAcceptsActivation(expanded);
         if (expanded && prev != DeckState.Expanded)
             Window.ActivateForInput();
+
+        // DeckPillHidden: when set, hide the pill window at rest.
+        if (decision.Next == DeckState.Rest && Model.PillHidden)
+            Window.Hide();
+        else
+            Window.Show();
 
         View?.Refresh();
         SyncEditorIfExpanded();
@@ -455,6 +479,110 @@ public sealed class DeckController : IDisposable
         _idleTimer = null;
     }
 
+    // MARK: - Stagger animation timer
+
+    /// <summary>Drives the fan-stagger reveal at ~60 fps until all tabs are
+    /// fully revealed (StageProgress returns 1.0 for every item).</summary>
+    private void StartAnimTimer()
+    {
+        StopAnimTimer();
+        _animTimer = new System.Timers.Timer(16) { AutoReset = true };
+        _animTimer.Elapsed += (_, _) =>
+        {
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (_disposed || View is null) { StopAnimTimer(); return; }
+                View.Refresh();
+                // Stop once the last tab's reveal is complete.
+                var now = Seconds();
+                var start = View.Reveal.RevealStart;
+                if (start < 0) { StopAnimTimer(); return; }
+                var elapsed = now - start;
+                // Max delay = FanLimit * 0.042 + 0.34 spring ≈ 0.55s
+                if (elapsed > 0.6)
+                {
+                    View.Reveal.RevealStart = -1; // settled
+                    StopAnimTimer();
+                }
+            });
+        };
+        _animTimer.Start();
+    }
+
+    private void StopAnimTimer()
+    {
+        _animTimer?.Stop();
+        _animTimer?.Dispose();
+        _animTimer = null;
+    }
+
+    // MARK: - Hover preview / OpenOnHover
+
+    /// <summary>Schedule a hover preview or open-on-hover after the configured
+    /// delay. Called from <see cref="OnPointerMoved"/> when a tab is hovered.</summary>
+    private void ScheduleHoverAction(string? noteId)
+    {
+        CancelHoverPreview();
+        if (noteId is null || View is null) return;
+        if (StateMachine.State != DeckState.Fan) return;
+
+        // OpenOnHover takes priority over preview (same as macOS).
+        var delay = Model.OpenOnHover ? 400 : (Model.TabPreview ? 180 : 0);
+        if (delay <= 0) return;
+
+        _hoverTimer = new System.Timers.Timer(delay) { AutoReset = false };
+        _hoverTimer.Elapsed += (_, _) =>
+        {
+            _dispatcher.TryEnqueue(() =>
+            {
+                _hoverTimer = null;
+                if (_disposed || View is null) return;
+                if (StateMachine.State != DeckState.Fan) return;
+                if (View.Reveal.HoverTabId != noteId) return;
+
+                if (Model.OpenOnHover)
+                {
+                    OnExpand(noteId);
+                }
+                else if (Model.TabPreview)
+                {
+                    View.Reveal.PreviewNoteId = noteId;
+                    View.Refresh();
+                }
+            });
+        };
+        _hoverTimer.Start();
+    }
+
+    private void CancelHoverPreview()
+    {
+        _hoverTimer?.Stop();
+        _hoverTimer?.Dispose();
+        _hoverTimer = null;
+        if (View is not null && View.Reveal.PreviewNoteId is not null)
+        {
+            View.Reveal.PreviewNoteId = null;
+            View.Refresh();
+        }
+    }
+
+    // MARK: - Escape dismiss
+
+    /// <summary>Handle Escape key: close find bar → collapse note → dismiss
+    /// deck. Mirrors the macOS Esc chain.</summary>
+    public void HandleEscape()
+    {
+        if (StateMachine.State == DeckState.Expanded)
+        {
+            // If find bar is open, close it first (handled by NoteEditorControl).
+            OnCollapse();
+        }
+        else if (StateMachine.State == DeckState.Fan)
+        {
+            OnDismiss();
+        }
+    }
+
     // MARK: - Disposal
 
     public void Dispose()
@@ -463,6 +591,8 @@ public sealed class DeckController : IDisposable
         _disposed = true;
         CancelExitWork();
         StopIdleWatch();
+        StopAnimTimer();
+        CancelHoverPreview();
         _notesSub?.Dispose();
         _notesSub = null;
         _pollTimer?.Stop();

@@ -70,11 +70,11 @@ public sealed class DeckView : UserControl
     }
 
     /// <summary>The frame from the last paint pass, computed on demand.</summary>
-    public RenderDeckFrame GetOrComputeFrame(double width, double height)
+    public RenderDeckFrame GetOrComputeFrame(double width, double height, double now = 0)
     {
         if (_frame is { } f) return f;
         if (ViewModel is null) return EmptyFrame();
-        _frame = ViewModel.Render(height, width, LabelCacheSingleton.Get(), Reveal);
+        _frame = ViewModel.Render(height, width, LabelCacheSingleton.Get(), Reveal, now);
         return _frame;
     }
 
@@ -109,6 +109,8 @@ public sealed class DeckView : UserControl
 
         _editor.OnRight = onRight;
         _editor.BodyFontSize = fontSize;
+        if (ViewModel is not null)
+            _editor.MarkdownEnabled = ViewModel.Settings().MarkdownStyling;
         _editor.Width = item.Width;
         _editor.Height = item.Height;
         Canvas.SetLeft(_editor, item.X);
@@ -132,7 +134,8 @@ public sealed class DeckView : UserControl
         // races ahead of the first relayout.
         if (_panelW <= 0) _panelW = sender.ActualWidth;
         if (_panelH <= 0) _panelH = sender.ActualHeight;
-        _frame ??= ViewModel.Render(_panelH, _panelW, LabelCacheSingleton.Get(), Reveal);
+        var now = Environment.TickCount / 1000.0;
+        _frame ??= ViewModel.Render(_panelH, _panelW, LabelCacheSingleton.Get(), Reveal, now);
         DeckLog.Write("VIEW", $"OnDraw w={_panelW:F0} h={_panelH:F0} items={_frame.Items.Count} fan={_frame.FanVisible} pill={_frame.PillVisible}");
         _painter.Paint(args.DrawingSession, _frame, _panelW);
     }
