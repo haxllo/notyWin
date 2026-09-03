@@ -137,6 +137,22 @@ public partial class App : Application
                     settings.Changed += s => hotkeys.RegisterFromSettings(s);
                     Log("GlobalHotKeys registered");
 
+                    var tray = new TrayIcon();
+                    tray.OnNewNote = () =>
+                    {
+                        var created = notes.Create();
+                        var (cx, cy) = DeckWindow.CursorPos();
+                        var displays = DisplayEnumerator.Snapshot();
+                        var deck = manager.FocusAt(cx, cy, displays);
+                        deck?.OnExpand(created.Id);
+                    };
+                    tray.OnQuit = () =>
+                    {
+                        manager.Dispose();
+                        Microsoft.UI.Xaml.Application.Current.Exit();
+                    };
+                    Log("TrayIcon created");
+
                     foreach (var d in manager.Decks.Values)
                     {
                         d.Window.Show();
