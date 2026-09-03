@@ -44,7 +44,6 @@ public sealed class DeckWindow
         };
         AppWindow = Window.AppWindow;
         var presenter = (OverlappedPresenter)AppWindow.Presenter;
-        presenter.SetBorderAndTitleBar(true, false);   // border yes, title bar no
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
         presenter.IsMaximizable = false;
@@ -52,6 +51,13 @@ public sealed class DeckWindow
         presenter.IsModal = false;
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(Window);
+        // Switch the window to WS_POPUP BEFORE showing. OverlappedPresenter
+        // defaults to WS_OVERLAPPEDWINDOW which reserves non-client area for
+        // the system frame and buttons. We don't need that -- the panel is
+        // borderless -- so the style swap has to happen before the first
+        // ShowWindow call, or the system re-allocates the window's internal
+        // state and our WndProc subclass stops receiving mouse events.
+        SetWindowLongPtr(Hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
         _instanceProc = InstanceWndProc;
         InstallHook();
     }
@@ -64,19 +70,20 @@ public sealed class DeckWindow
 
     public void SetFrame(double x, double y, double w, double h)
     {
-        // Drop the OS chrome completely by rewriting the window style to
-        // WS_POPUP. OverlappedPresenter (the default WinUI 3 border) reserves
-        // 100+ pt for the system buttons + non-client area; the deck only
-        // needs to draw the pill. This is the same trick the SwiftUI app gets
-        // for free on macOS via .borderless.
-        SetWindowLongPtr(Hwnd, GWL_STYLE,
-            WS_POPUP | WS_VISIBLE);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
             (int)Math.Round(x), (int)Math.Round(y),
             (int)Math.Round(w), (int)Math.Round(h)));
     }
 
-    public void Show() => Window.Activate();
+    public void Show()
+    {
+        // Show without activating so the deck doesn't steal focus from the
+        // user's current app. ShowWindow(SW_SHOWNOACTIVATE) is the right
+        // primitive for a tool window.
+        const int SW_SHOWNOACTIVATE = 4;
+        ShowWindow(Hwnd, SW_SHOWNOACTIVATE);
+    }
+
     public void Hide() => AppWindow.Hide();
 
     // MARK: - Raw input hook (Win32)
@@ -116,6 +123,9 @@ public sealed class DeckWindow
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
 
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
     private const int GWLP_WNDPROC = -4;
     private const int GWL_STYLE = -16;
     private const int WS_POPUP = unchecked((int)0x80000000);
@@ -136,17 +146,26 @@ public sealed class DeckWindow
         {
             int x = (int)(short)(lParam.ToInt64() & 0xFFFF);
             int y = (int)(short)((lParam.ToInt64() >> 16) & 0xFFFF);
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
+                $"[{DateTime.UtcNow:O}] WM_MOUSEMOVE x={x} y={y}\n");
             PointerMoved?.Invoke(x, y);
             StartTrack();
         }
         else if (msg == WM_MOUSELEAVE)
         {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
+                $"[{DateTime.UtcNow:O}] WM_MOUSELEAVE\n");
             PointerExited?.Invoke();
         }
         else if (msg == WM_RBUTTONDOWN)
         {
             int x = (int)(short)(lParam.ToInt64() & 0xFFFF);
             int y = (int)(short)((lParam.ToInt64() >> 16) & 0xFFFF);
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
+                $"[{DateTime.UtcNow:O}] WM_RBUTTONDOWN x={x} y={y}\n");
             RightButtonDown?.Invoke(x, y);
         }
         if (_prevWndProc != IntPtr.Zero)
