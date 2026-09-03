@@ -39,6 +39,9 @@ public sealed class NoteEditorControl : UserControl
     /// <summary>Fired after a mutation so the deck tabs repaint.</summary>
     public Action? OnMutated { get; set; }
 
+    /// <summary>Asked to detach into a floating note window.</summary>
+    public Action<Note>? OnDetachRequested { get; set; }
+
     public double BodyFontSize
     {
         get => _bodyFontSize;
@@ -331,6 +334,7 @@ public sealed class NoteEditorControl : UserControl
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         _swatches = new StackPanel
         {
@@ -355,7 +359,12 @@ public sealed class NoteEditorControl : UserControl
             OnMutated?.Invoke();
             OnRequestCollapse?.Invoke();
         }));
-        _footerButtons.Add(MakeFooterButton("Close", 4, (_, _) => OnRequestCollapse?.Invoke()));
+        _footerButtons.Add(MakeFooterButton("Pop out", 4, (_, _) =>
+        {
+            if (_note is null) return;
+            OnDetachRequested?.Invoke(_note);
+        }));
+        _footerButtons.Add(MakeFooterButton("Close", 5, (_, _) => OnRequestCollapse?.Invoke()));
         foreach (var b in _footerButtons) footer.Children.Add(b);
         return footer;
     }

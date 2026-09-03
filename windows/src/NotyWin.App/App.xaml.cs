@@ -118,11 +118,20 @@ public partial class App : Application
                     manager.RefreshDisplays();
                     Log($"RefreshDisplays: {manager.Decks.Count} decks");
 
+                    // Floating note for "pop out" from the deck editor.
+                    var floating = new FloatingNote(notes, settings, DispatcherQueue);
+
                     // Wire cog button on each deck to open settings.
                     foreach (var d in manager.Decks.Values)
                     {
                         d.OnCogClicked = () => new SettingsWindow(settings, manager).Activate();
                         d.OnMoreClicked = () => new LibraryWindow(notes, manager).Activate();
+                        if (d.View is not null)
+                            d.View.Editor.OnDetachRequested = n =>
+                            {
+                                floating.ShowFor(n.Id);
+                                d.OnCollapse();
+                            };
                     }
 
                     notes.Subscribe(new PersistOnChange(persistence));
