@@ -67,8 +67,8 @@ public sealed class DeckPainter
     private static void PaintPill(CanvasDrawingSession ds, RenderItem r)
     {
         var rect = new Rect(r.X, r.Y, r.Width, r.Height);
-        ds.FillRoundedRectangle(rect, 6, 6, Color.FromArgb(0x99, 0x00, 0x00, 0x00));
-        ds.FillRoundedRectangle(rect, 6, 6, BgMaterial);
+        // Use a lighter pill background so coloured dashes are visible against it.
+        ds.FillRoundedRectangle(rect, 6, 6, Color.FromArgb(0xCC, 0x20, 0x20, 0x20));
 
         var colors = r.DashColors;
         var overflow = r.PillOverflow;
@@ -85,9 +85,9 @@ public sealed class DeckPainter
 
         if (colors is null || colors.Count == 0)
         {
-            // Empty deck — one secondary dash, like Swift.
+            // Empty deck — one bright secondary dash, clearly visible.
             var dashRect = new Rect(r.X + (r.Width - dashW) / 2, y, dashW, dashH);
-            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0x66, Secondary.R, Secondary.G, Secondary.B));
+            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0xCC, Secondary.R, Secondary.G, Secondary.B));
             return;
         }
 
@@ -100,7 +100,7 @@ public sealed class DeckPainter
         if (overflow)
         {
             var dashRect = new Rect(r.X + (r.Width - dashW) / 2, y, dashW, dashH);
-            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0x80, Secondary.R, Secondary.G, Secondary.B));
+            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0x99, Secondary.R, Secondary.G, Secondary.B));
         }
     }
 

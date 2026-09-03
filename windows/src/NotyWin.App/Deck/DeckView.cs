@@ -59,6 +59,8 @@ public sealed class DeckView : UserControl
         _canvas.Draw += OnDraw;
         _canvas.SizeChanged += OnCanvasSizeChanged;
         _overlay.Children.Add(_editor);
+        _overlay.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        _root.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         _root.Children.Add(_canvas);
         _root.Children.Add(_overlay);
         Content = _root;

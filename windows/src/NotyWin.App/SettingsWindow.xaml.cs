@@ -1,8 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using NotyWin.App.Models;
 using NotyWin.App.Geometry;
 using NotyWin.App.Deck;
+using Color = Windows.UI.Color;
 
 namespace NotyWin.App;
 
@@ -24,13 +26,18 @@ public sealed partial class SettingsWindow : Window
         _manager = manager;
         _snapshot = settings.Load();
         BuildShortcutsTab();
-        Nav.SelectedItem = Nav.MenuItems[0];
+        ShortcutsBtn.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
     }
 
-    private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private void OnNavClicked(object sender, RoutedEventArgs e)
     {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        if (sender is not Button btn || btn.Tag is not string tag) return;
         Content.Children.Clear();
+        // Reset all button backgrounds
+        ShortcutsBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        DeckBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        NotesBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        btn.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
         switch (tag)
         {
             case "shortcuts": BuildShortcutsTab(); break;

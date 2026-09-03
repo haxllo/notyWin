@@ -84,6 +84,18 @@ public partial class App : Application
             Log("Persistence OK");
             var notes = new NoteList(persistence.LoadAll());
             Log($"Loaded {notes.Notes.Count} notes");
+
+            // Seed a few sample notes on the very first run so the user has
+            // something to see in the deck. Welcome note + a couple of demos.
+            if (notes.Notes.Count == 0)
+            {
+                Log("First run — seeding welcome notes");
+                notes.Create("Welcome to NotyWin.\n\nMove your cursor to the right edge of the screen to wake the deck.");
+                notes.Create("Try the color swatches in the footer.\n- Pick a color\n- Edit the body\n- Watch it autosave");
+                notes.Create("Right-click any tab for the menu.\nPin it, archive it, cycle its colour, or delete it.");
+                notes.Create("Open Settings (cog button or tray menu) to rebind shortcuts and change the deck style.");
+            }
+
             var manager = new DeckManager(notes, settings);
             Services = new IService(settings, persistence, notes, manager);
             Log("DeckManager constructed");

@@ -1,7 +1,9 @@
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 using NotyWin.App.Deck;
 using NotyWin.App.Models;
 using Color = Windows.UI.Color;
@@ -49,18 +51,81 @@ public sealed partial class LibraryWindow : Window
                 (n.Title?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (n.Body?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
 
-        var items = filtered.Select(n => new NoteRow
+        NoteList.Children.Clear();
+        var count = 0;
+        foreach (var n in filtered)
         {
-            Id = n.Id,
-            Title = n.DisplayTitle("Untitled"),
-            Subtitle = BuildSubtitle(n),
-            ColorBarBrush = new SolidColorBrush(Color.FromArgb(
+            count++;
+            var row = BuildNoteRow(n);
+            NoteList.Children.Add(row);
+        }
+        CountLabel.Text = $"{count} note{(count == 1 ? "" : "s")}";
+    }
+
+    private FrameworkElement BuildNoteRow(Note n)
+    {
+        var grid = new Grid
+        {
+            Padding = new Thickness(6, 4, 6, 4),
+            ColumnSpacing = 8,
+            Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var bar = new Rectangle
+        {
+            Width = 4, Height = 30, RadiusX = 2, RadiusY = 2,
+            Fill = new SolidColorBrush(Color.FromArgb(
                 (byte)((n.Palette.DashArgb >> 24) & 0xFF), (byte)((n.Palette.DashArgb >> 16) & 0xFF),
                 (byte)((n.Palette.DashArgb >> 8) & 0xFF), (byte)(n.Palette.DashArgb & 0xFF))),
-            Note = n,
-        }).ToList();
-        NoteList.ItemsSource = items;
-        CountLabel.Text = $"{items.Count} note{(items.Count == 1 ? "" : "s")}";
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(bar, 0);
+        grid.Children.Add(bar);
+
+        var text = new StackPanel { Spacing = 2 };
+        text.Children.Add(new TextBlock
+        {
+            Text = n.DisplayTitle("Untitled"),
+            FontSize = 12.5,
+            FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        text.Children.Add(new TextBlock
+        {
+            Text = BuildSubtitle(n),
+            FontSize = 10, Opacity = 0.6,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var captured = n;
+        grid.PointerPressed += (_, _) => SelectNote(captured, grid);
+        grid.Tag = n.Id;
+
+        return grid;
+    }
+
+    private void SelectNote(Note n, Grid rowGrid)
+    {
+        // Highlight selected
+        foreach (var child in NoteList.Children)
+            if (child is Grid g)
+                g.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        rowGrid.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
+
+        _selected = n;
+        DetailHeader.Visibility = Visibility.Visible;
+        DetailColorDot.Fill = new SolidColorBrush(Color.FromArgb(
+            (byte)((n.Palette.DashArgb >> 24) & 0xFF), (byte)((n.Palette.DashArgb >> 16) & 0xFF),
+            (byte)((n.Palette.DashArgb >> 8) & 0xFF), (byte)(n.Palette.DashArgb & 0xFF)));
+        DetailTitle.Text = n.DisplayTitle("Untitled");
+        DetailMeta.Text = $"Edited {TimeAgo(n.Modified)}";
+        _suppress = true;
+        DetailEditor.Text = FromWire(n.Body ?? "");
+        _suppress = false;
     }
 
     private static string BuildSubtitle(Note n)
@@ -85,21 +150,7 @@ public sealed partial class LibraryWindow : Window
 
     private void OnNoteSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppress) return;
-        if (NoteList.SelectedItem is not NoteRow row)
-        {
-            DetailHeader.Visibility = Visibility.Collapsed;
-            _selected = null;
-            return;
-        }
-        _selected = row.Note;
-        DetailHeader.Visibility = Visibility.Visible;
-        DetailColorDot.Fill = row.ColorBarBrush;
-        DetailTitle.Text = row.Title;
-        DetailMeta.Text = $"Edited {TimeAgo(row.Note.Modified)}";
-        _suppress = true;
-        DetailEditor.Text = FromWire(row.Note.Body ?? "");
-        _suppress = false;
+        // Legacy handler — selection is now per-row PointerPressed.
     }
 
     private void OnDetailTextChanged(object sender, TextChangedEventArgs e)
@@ -157,26 +208,17 @@ public sealed partial class LibraryWindow : Window
 
     private void SelectById(string id)
     {
-        _suppress = true;
-        foreach (var item in NoteList.Items)
+        foreach (var child in NoteList.Children)
         {
-            if (item is NoteRow r && r.Note.Id == id)
+            if (child is Grid g && g.Tag is string s && s == id)
             {
-                NoteList.SelectedItem = item;
+                // Find the note and select it.
+                var n = _notes.ById(id);
+                if (n is not null) SelectNote(n, g);
                 break;
             }
         }
-        _suppress = false;
     }
 
     private static string FromWire(string body) => body.Replace("\r\n", "\n").Replace('\n', '\r');
-
-    public sealed class NoteRow
-    {
-        public required string Id { get; init; }
-        public required string Title { get; init; }
-        public required string Subtitle { get; init; }
-        public required Brush ColorBarBrush { get; init; }
-        public required Note Note { get; init; }
-    }
 }
