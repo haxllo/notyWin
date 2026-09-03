@@ -143,6 +143,20 @@ public sealed partial class SettingsWindow : Window
         fullscreenSwitch.Toggled += (_, _) => UpdateSetting(x => x with { ShowOverFullScreen = fullscreenSwitch.IsOn });
         stack.Children.Add(MakeRow(MakeLabel("Show over full-screen"), fullscreenSwitch));
 
+        // Launch at login
+        var launchSwitch = new ToggleSwitch { IsOn = LaunchAtLogin.IsEnabled(), OnContent = "On", OffContent = "Off" };
+        launchSwitch.Toggled += (_, _) =>
+        {
+            try
+            {
+                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                LaunchAtLogin.SetEnabled(launchSwitch.IsOn, exePath);
+                UpdateSetting(x => x with { LaunchAtLogin = launchSwitch.IsOn });
+            }
+            catch { }
+        };
+        stack.Children.Add(MakeRow(MakeLabel("Launch at login"), launchSwitch));
+
         Content.Children.Add(stack);
     }
 

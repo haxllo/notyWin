@@ -173,6 +173,49 @@ public partial class App : Application
                     };
                     Log("TrayIcon created");
 
+                    // Register noty:// URL scheme and handle command-line args.
+                    try
+                    {
+                        var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                        UrlScheme.Register(exePath);
+                        var urlScheme = new UrlScheme();
+                        urlScheme.OnNew = text =>
+                        {
+                            var created = notes.Create(string.IsNullOrEmpty(text) ? "" : text);
+                            var (cx, cy) = DeckWindow.CursorPos();
+                            var displays = DisplayEnumerator.Snapshot();
+                            var deck = manager.FocusAt(cx, cy, displays);
+                            deck?.OnExpand(created.Id);
+                        };
+                        urlScheme.OnCapture = () => quickCapture.Toggle();
+                        urlScheme.OnAll = () => new LibraryWindow(notes, manager).Activate();
+                        urlScheme.OnSettings = () => new SettingsWindow(settings, manager).Activate();
+
+                        var args = Environment.GetCommandLineArgs();
+                        if (args.Length > 1)
+                        {
+                            Log($"Command-line args: {string.Join(" ", args.Skip(1))}");
+                            foreach (var a in args.Skip(1))
+                                if (a.StartsWith("noty://")) urlScheme.Handle(a);
+                        }
+                        Log("URL scheme wired");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"URL scheme setup failed: {ex.Message}");
+                    }
+
+                    // Sync LaunchAtLogin setting on startup.
+                    try
+                    {
+                        if (settings.Load().LaunchAtLogin && !LaunchAtLogin.IsEnabled())
+                        {
+                            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                            LaunchAtLogin.SetEnabled(true, exePath);
+                        }
+                    }
+                    catch { }
+
                     foreach (var d in manager.Decks.Values)
                     {
                         d.Window.Show();
