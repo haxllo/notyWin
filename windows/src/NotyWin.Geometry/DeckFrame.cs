@@ -20,6 +20,14 @@ public readonly record struct DisplayRect(
     public double FullHeight => FullBottom - FullTop;
     public double VisWidth => VisRight - VisLeft;
     public double VisHeight => VisBottom - VisTop;
+
+    /// <summary>Convert from physical screen pixels to DIPs using the given DPI scale.</summary>
+    public DisplayRect ToDips(double dpiScale) => new(
+        DisplayId,
+        FullLeft / dpiScale, FullTop / dpiScale,
+        FullRight / dpiScale, FullBottom / dpiScale,
+        VisLeft / dpiScale, VisTop / dpiScale,
+        VisRight / dpiScale, VisBottom / dpiScale);
 }
 
 public sealed class DeckLayoutResult
@@ -62,6 +70,8 @@ public static class DeckFrame
     {
         // The dormant panel is the detection strip: the pill is drawn at the
         // edge and the rest of the width is transparent and click-through.
+        // All values here are in DIPs — the display rect is converted by
+        // the caller (DeckController) before this is called.
         var h = DeckGeom.PillHeight(Math.Max(1, noteCount));
         var w = Math.Max(DeckGeom.PillWidth + 2, edgeWidth);
         var availableH = Math.Max(1, display.VisHeight - h);

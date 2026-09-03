@@ -36,6 +36,11 @@ public sealed class DeckPainter
 
     public void Paint(CanvasDrawingSession ds, RenderDeckFrame frame, double panelWidth)
     {
+        DeckLog.Write("PAINT", $"Painting {frame.Items.Count} items, panelW={panelWidth}");
+        foreach (var ri in frame.Items)
+        {
+            DeckLog.Write("PAINT", $"  {ri.Kind} ({ri.X},{ri.Y}) {ri.Width}x{ri.Height} note={ri.Note?.Id?[..8]}");
+        }
         foreach (var ri in frame.Items)
         {
             switch (ri.Kind)

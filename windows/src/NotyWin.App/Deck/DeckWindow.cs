@@ -110,13 +110,12 @@ public sealed class DeckWindow
         return (p.X, p.Y);
     }
 
-    /// <summary>Frame arrives in physical pixels; the XAML surface is DIPs.</summary>
+    /// <summary>Frame arrives in DIPs (same units as AppWindow.MoveAndResize).</summary>
     public void SetFrame(double x, double y, double w, double h)
     {
-        var s = DpiScale;
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-            (int)Math.Round(x / s), (int)Math.Round(y / s),
-            (int)Math.Round(w / s), (int)Math.Round(h / s)));
+            (int)Math.Round(x), (int)Math.Round(y),
+            (int)Math.Round(w), (int)Math.Round(h)));
     }
 
     public void Show() => ShowWindow(Hwnd, SW_SHOWNOACTIVATE);

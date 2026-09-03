@@ -32,8 +32,18 @@ public sealed class DeckView : UserControl
     private RenderDeckFrame? _frame;
     private double _panelW;
     private double _panelH;
+    private DeckViewModel? _viewModel;
 
-    public DeckViewModel? ViewModel { get; set; }
+    public DeckViewModel? ViewModel
+    {
+        get => _viewModel;
+        set
+        {
+            _viewModel = value;
+            _frame = null;
+            _canvas.Invalidate();
+        }
+    }
     public RevealProgressTracker Reveal { get; } = new();
     public bool OnRightEdge { get; set; } = true;
     public NoteEditorControl Editor => _editor;
@@ -83,8 +93,11 @@ public sealed class DeckView : UserControl
     public HitTest.HitItem? HitAt(double x, double y)
     {
         if (ViewModel is null) return null;
-        var frame = GetOrComputeFrame(_panelW, _panelH);
-        return HitTest.Test(x, y, frame, _panelW, OnRightEdge);
+        var w = _canvas.ActualWidth;
+        var h = _canvas.ActualHeight;
+        if (w <= 0 || h <= 0) return null;
+        var frame = GetOrComputeFrame(w, h);
+        return HitTest.Test(x, y, frame, w, OnRightEdge);
     }
 
     /// <summary>

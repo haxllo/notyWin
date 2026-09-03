@@ -259,14 +259,17 @@ public sealed class DeckController : IDisposable
         DeckGeom.Scale = Model.DeckScale;
         StateMachine.RestingState = Model.DeckAlwaysShown ? DeckState.Fan : DeckState.Rest;
 
+        // Convert physical-pixel display rect to DIPs so the frame and the
+        // panel agree on units.
+        var dpi = Window.DpiScale;
+        var displayDips = display.ToDips(dpi);
         var frame = DeckFrame.Layout(
-            StateMachine.State, display, Model.OnLeftEdge,
+            StateMachine.State, displayDips, Model.OnLeftEdge,
             Math.Max(1, Model.NoteCount), Model.NoteWidth,
             Model.EdgeWidth, Model.DeckYRatio);
+        DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} frame=({frame.X:F0},{frame.Y:F0}) {frame.Width:F0}x{frame.Height:F0} noteCount={Model.NoteCount} dpi={dpi:F2}");
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
-
-        var s = Window.DpiScale;
-        View?.Resize(frame.Width / s, frame.Height / s);
+        View?.Resize(frame.Width, frame.Height);
 
         // Rest = pill IS visible. The window is the detection strip.
         if (StateMachine.State == DeckState.Rest)
