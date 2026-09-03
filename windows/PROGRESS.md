@@ -265,7 +265,37 @@ app improves visibly for the resting pill, the tabs, and the open note.
 
 5 new xUnit tests added (114/114 total).
 
-## Gaps (step 6+ work)
+### Step 6a — Runtime glue (runnable build)
+
+First build that actually launches. No UI polish, no new features; just the
+minimum scaffolding so `dotnet run` shows the per-display deck HWNDs.
+
+- **Namespace cleanup.** `NotyWin_App` → `NotyWin.App` across `App.xaml(.cs)`,
+  `MainWindow.xaml(.cs)`, and the removed template `MainPage`. Same root
+  namespace as the rest of the project.
+- **Windows App Runtime bootstrap.** `App.OnLaunched` calls
+  `Microsoft.Windows.ApplicationModel.DynamicDependency.Bootstrap.Initialize(0x00010007)`
+  before any WinUI 3 type is touched. Without this, an unpackaged WinUI 3
+  app fails at the first `new MainWindow()` with `COMException 0x80004005`.
+- **Service graph.** `IService` is a `record` aggregating `JsonSettingsStore`,
+  `SqliteNotePersistence`, `NoteList`, and `DeckManager`. `App.OnLaunched`
+  builds the full graph in `LocalApplicationData\Noty\` (settings.json,
+  notes.db, note.key.dpapi) and exposes it on `App.Services`.
+- **MainWindow becomes a status window.** Stripped the template's Frame
+  and TitleBar. Now a 5-row grid: title, "Displays: ...", "Notes: ...",
+  one-line usage hint.
+- **DisplayChangeWatcher → DeckManager refresh.** Hot-plug now calls
+  `manager.RefreshDisplays()` and updates the status window.
+- **Per-display decks are shown.** `foreach (var d in manager.Decks.Values)
+  d.Window.Show();` — the Win32 deck HWNDs are now on screen.
+- **Note persistence is auto-wired.** `PersistOnChange` subscribes to
+  `NoteList`; every mutation hits SQLite immediately. (Editor autosave
+  is a step 7 concern.)
+
+`dotnet build` produces `NotyWin.App.exe` (162 KB). Run with
+`dotnet run --project windows\src\NotyWin.App` from the repo root.
+
+## Gaps (step 6b+ work)
 
 ### Critical (visible app)
 
