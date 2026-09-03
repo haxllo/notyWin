@@ -36,6 +36,9 @@ public sealed class RenderItem
     public bool Hovering { get; init; }
     public int TabIndex { get; init; }
     public int HiddenCount { get; init; }
+    /// <summary>For pills: per-dash colours (truncated to MaxDashes + an overflow marker).</summary>
+    public IReadOnlyList<int>? DashColors { get; init; }
+    public bool PillOverflow { get; init; }
 
     /// <summary>0..1 for staged-reveal animations. 1 = fully revealed.</summary>
     public double RevealProgress { get; init; } = 1.0;
@@ -120,6 +123,10 @@ public sealed class DeckViewModel
         }
 
         // Pill is always drawn at the same screen position it occupies at rest.
+        var pillColors = Notes.Active
+            .Take(DeckGeom.MaxDashes)
+            .Select(n => n.Palette.DashArgb)
+            .ToList();
         items.Add(new RenderItem
         {
             Kind = RenderItemKind.Pill,
@@ -128,6 +135,8 @@ public sealed class DeckViewModel
             Width = DeckGeom.PillWidth,
             Height = pillH,
             RevealProgress = reveal.PillProgress,
+            DashColors = pillColors,
+            PillOverflow = Notes.ActiveCount > DeckGeom.MaxDashes,
         });
 
         // Edge spine (the dashed rule on the screen-edge side).
@@ -158,6 +167,24 @@ public sealed class DeckViewModel
                     RevealProgress = reveal.PreviewProgress,
                 });
             }
+        }
+
+        // Expanded note: paints a paper-coloured rect with the body as a placeholder
+        // until the full editor (Markdown-as-you-type, find bar, etc.) ships.
+        if (reveal.ExpandedNoteId is { } eid && Notes.ById(eid) is { } en)
+        {
+            var editorW = s.FloatingNoteWidth > 0 ? s.FloatingNoteWidth : 360;
+            var editorH = s.FloatingNoteHeight > 0 ? s.FloatingNoteHeight : 380;
+            var x = onRight ? panelWidth - DeckGeom.ExpandedWidth(editorW) : 0;
+            items.Add(new RenderItem
+            {
+                Kind = RenderItemKind.ExpandedNote,
+                X = x,
+                Y = (panelHeight - editorH) / 2,
+                Width = editorW,
+                Height = editorH,
+                Note = en,
+            });
         }
 
         return new DeckFrame

@@ -49,6 +49,7 @@ public sealed class DeckPainter
                 case RenderItemKind.CogButton: PaintCog(ds, ri); break;
                 case RenderItemKind.EdgeSpine: PaintSpine(ds, ri); break;
                 case RenderItemKind.NotePreview: PaintPreview(ds, ri); break;
+                case RenderItemKind.ExpandedNote: PaintExpanded(ds, ri); break;
             }
         }
     }
@@ -61,20 +62,41 @@ public sealed class DeckPainter
         ds.FillRoundedRectangle(rect, 6, 6, Color.FromArgb(0x99, 0x00, 0x00, 0x00));
         ds.FillRoundedRectangle(rect, 6, 6, BgMaterial);
 
-        var dashCount = 5;
+        var colors = r.DashColors;
+        var overflow = r.PillOverflow;
+        var totalDashes = colors?.Count ?? (NotesEmpty(r) ? 1 : 0);
+        if (overflow) totalDashes += 1;
+        if (totalDashes == 0) totalDashes = 1;
+
         var dashGap = DeckGeom.DashGap;
         var dashW = DeckGeom.DashWidth;
         var dashH = DeckGeom.DashHeight;
         var pad = DeckGeom.PillPad;
-        var totalH = pad * 2 + dashCount * dashH + (dashCount - 1) * dashGap;
+        var totalH = pad * 2 + totalDashes * dashH + (totalDashes - 1) * dashGap;
         var y = r.Y + (r.Height - totalH) / 2;
-        for (var i = 0; i < dashCount; i++)
+
+        if (colors is null || colors.Count == 0)
+        {
+            // Empty deck — one secondary dash, like Swift.
+            var dashRect = new Rect(r.X + (r.Width - dashW) / 2, y, dashW, dashH);
+            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0x66, Secondary.R, Secondary.G, Secondary.B));
+            return;
+        }
+
+        for (var i = 0; i < colors.Count; i++)
         {
             var dashRect = new Rect(r.X + (r.Width - dashW) / 2, y, dashW, dashH);
-            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Secondary);
+            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, ColorFromArgb(colors[i]));
             y += dashH + dashGap;
         }
+        if (overflow)
+        {
+            var dashRect = new Rect(r.X + (r.Width - dashW) / 2, y, dashW, dashH);
+            ds.FillRoundedRectangle(dashRect, 2.5f, 2.5f, Color.FromArgb(0x80, Secondary.R, Secondary.G, Secondary.B));
+        }
     }
+
+    private static bool NotesEmpty(RenderItem r) => r.DashColors is { Count: 0 };
 
     // MARK: Tab
 
@@ -84,6 +106,18 @@ public sealed class DeckPainter
         var color = ColorFromArgb(note.Palette.PaperArgb);
         var ink = ColorFromArgb(note.Palette.InkArgb);
         var dash = ColorFromArgb(note.Palette.DashArgb);
+
+        // Anchor at the edge that meets the screen so the lean and the lift
+        // both feel like they pivot against the screen.
+        var cx = (float)(r.X + (r.Width + (r.Lifted ? 0 : -DeckGeom.Bleed)) / 2);
+        var cy = (float)(r.Y + r.Height / 2);
+
+        var save = ds.Transform;
+        var m = Matrix3x2.CreateTranslation(cx, cy)
+              * Matrix3x2.CreateRotation((float)DeckGeom.Lean(true) * (MathF.PI / 180f))
+              * Matrix3x2.CreateScale((float)(r.Lifted ? 1.04 : 1.0), (float)(r.Lifted ? 1.04 : 1.0))
+              * Matrix3x2.CreateTranslation(-cx, -cy);
+        ds.Transform = save * m;
 
         var geo = TabGeo(r.X, r.Y, r.Width, r.Height, onRight: true);
         ds.FillGeometry(geo, color);
@@ -108,10 +142,9 @@ public sealed class DeckPainter
             TrimmingGranularity = CanvasTextTrimmingGranularity.Character,
         };
 
-        var cx = (float)(r.X + r.Width / 2);
-        var cy = (float)(r.Y + r.Height / 2);
-        var save = ds.Transform;
-        ds.Transform = Matrix3x2.CreateRotation(90, new Vector2(cx, cy));
+        var innerCx = (float)(r.X + r.Width / 2);
+        var innerCy = (float)(r.Y + r.Height / 2);
+        ds.Transform = save * m * Matrix3x2.CreateRotation(90f, new Vector2(innerCx, innerCy));
         ds.DrawTextLayout(textLayout, labelX, labelY, ink);
         ds.Transform = save;
 
@@ -221,6 +254,45 @@ public sealed class DeckPainter
             FontWeight = Weight.Bold,
         };
         ds.DrawText(n.DisplayTitle("Untitled"), (float)(r.X + 10), (float)(r.Y + 9), ink, titleFont);
+    }
+
+    // MARK: ExpandedNote (placeholder until the full editor ships)
+
+    private static void PaintExpanded(CanvasDrawingSession ds, RenderItem r)
+    {
+        var n = r.Note!;
+        var paper = ColorFromArgb(n.Palette.PaperArgb);
+        var ink = ColorFromArgb(n.Palette.InkArgb);
+        // Dashed gutter on the deck-facing side reads as growing from the deck.
+        var rect = new Rect(r.X, r.Y, r.Width, r.Height);
+        ds.FillRoundedRectangle(rect, 8, 8, paper);
+        ds.DrawRoundedRectangle(rect, 8, 8, Color.FromArgb(0x33, ink.R, ink.G, ink.B), 1);
+
+        var titleFont = new CanvasTextFormat
+        {
+            FontFamily = "Segoe UI",
+            FontSize = 13f,
+            FontWeight = Weight.SemiBold,
+        };
+        ds.DrawText(n.DisplayTitle("Untitled"), (float)(r.X + 14), (float)(r.Y + 14), ink, titleFont);
+
+        var bodyFont = new CanvasTextFormat
+        {
+            FontFamily = "Segoe UI",
+            FontSize = 11f,
+        };
+        var body = n.Body ?? "";
+        if (body.Length == 0)
+        {
+            ds.DrawText("(empty)", (float)(r.X + 14), (float)(r.Y + 40),
+                Color.FromArgb(0x66, ink.R, ink.G, ink.B), bodyFont);
+        }
+        else
+        {
+            var layout = new CanvasTextLayout(ds, body, bodyFont, (float)(r.Width - 28), (float)(r.Height - 60));
+            ds.DrawTextLayout(layout, (float)(r.X + 14), (float)(r.Y + 40),
+                Color.FromArgb(0xCC, ink.R, ink.G, ink.B));
+        }
     }
 
     // MARK: Paths

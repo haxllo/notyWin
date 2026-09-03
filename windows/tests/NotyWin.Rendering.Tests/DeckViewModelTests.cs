@@ -90,6 +90,63 @@ public class DeckViewModelTests
     }
 
     [Fact]
+    public void Pill_DashColors_ArePerNotePalette()
+    {
+        var vm = new DeckViewModel(WithNotes(3), () => Defaults());
+        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
+            new RevealProgressTracker());
+        var pill = frame.Items.First(i => i.Kind == RenderItemKind.Pill);
+        Assert.NotNull(pill.DashColors);
+        Assert.Equal(3, pill.DashColors!.Count);
+        Assert.False(pill.PillOverflow);
+    }
+
+    [Fact]
+    public void Pill_Overflow_WhenNotesExceedMaxDashes()
+    {
+        var vm = new DeckViewModel(WithNotes(DeckGeom.MaxDashes + 2), () => Defaults());
+        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()),
+            new RevealProgressTracker());
+        var pill = frame.Items.First(i => i.Kind == RenderItemKind.Pill);
+        Assert.Equal(DeckGeom.MaxDashes, pill.DashColors!.Count);
+        Assert.True(pill.PillOverflow);
+    }
+
+    [Fact]
+    public void ExpandedNote_AppearsInFrame_WhenSet()
+    {
+        var list = WithNotes(1);
+        var note = list.Active.First();
+        var vm = new DeckViewModel(list, () => Defaults());
+        var reveal = new RevealProgressTracker { ExpandedNoteId = note.Id };
+        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()), reveal);
+        var expanded = Assert.Single(frame.Items, i => i.Kind == RenderItemKind.ExpandedNote);
+        Assert.Equal(note.Id, expanded.Note!.Id);
+    }
+
+    [Fact]
+    public void ExpandedNote_UsesEditorSizeFromSettings()
+    {
+        var list = WithNotes(1);
+        var note = list.Active.First();
+        var vm = new DeckViewModel(list, () => Defaults() with { FloatingNoteWidth = 200, FloatingNoteHeight = 150 });
+        var reveal = new RevealProgressTracker { ExpandedNoteId = note.Id };
+        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()), reveal);
+        var expanded = frame.Items.First(i => i.Kind == RenderItemKind.ExpandedNote);
+        Assert.Equal(200, expanded.Width);
+        Assert.Equal(150, expanded.Height);
+    }
+
+    [Fact]
+    public void Reveal_Lifted_SetsOnRenderItem()
+    {
+        var vm = new DeckViewModel(WithNotes(3), () => Defaults());
+        var reveal = new RevealProgressTracker { DraggedNoteId = vm.Notes.Notes.First().Id };
+        var frame = vm.Render(1080, 360, new LabelWidthCache(new LabelWidthCacheTests_Stub()), reveal);
+        Assert.Contains(frame.Items, i => i.Lifted && i.Kind == RenderItemKind.Tab);
+    }
+
+    [Fact]
     public void Render_OnLeftEdge_ReversesX()
     {
         var vm = new DeckViewModel(WithNotes(3), () => Defaults() with { DeckOnLeftEdge = true });

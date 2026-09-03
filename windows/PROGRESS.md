@@ -81,7 +81,7 @@ pure lib plus a WinUI 3 surface in the App project.
 | `RevealProgressTracker` (in same file) | `FanColumn.@State appeared / previewNoteID / dragID` | Tracks animation state separately from the state machine so paint passes are deterministic. |
 | `NotyWin.Rendering/HitTest.cs` | SwiftUI hit-testing | Iterates items in reverse (top-most first), returns the kind under the cursor. |
 
-Tests: 20 xUnit. Cover render-with-empty-deck, render-with-N-notes, compact-style chips, on-left-edge mirror, pill position, `+N` overflow, hit-test topmost, hit-test miss, `StageProgress` (default settled, stagger from start), `ShiftY` for drag-down, `ShiftY` for drag-up, label cache uppercasing + tracking.
+Tests: 25 xUnit. Cover render-with-empty-deck, render-with-N-notes, compact-style chips, on-left-edge mirror, pill position, `+N` overflow, hit-test topmost, hit-test miss, `StageProgress` (default settled, stagger from start), `ShiftY` for drag-down, `ShiftY` for drag-up, label cache uppercasing + tracking, per-note pill dash colours, `+N` overflow marker, expanded note placeholder + size-from-settings, drag-lifted render item.
 
 #### 4b. WinUI 3 surface
 
@@ -218,25 +218,74 @@ PR conversation can address them if/when a PR happens.
 
 ---
 
-## Gaps (step 5+ work)
+### Step 5 — Visual polish + interaction wiring
+
+Five small gaps inside step 4 closed this step. Pixel parity with the macOS
+app improves visibly for the resting pill, the tabs, and the open note.
+
+- **Per-note pill dashes.** `RenderItem.Pill` now carries
+  `DashColors: IReadOnlyList<int>` (per-note `Palette.DashArgb`) and
+  `PillOverflow: bool`. `DeckPainter.PaintPill` reads them and draws up to
+  `MaxDashes` real coloured dashes, with one secondary-coloured dash for the
+  `+N` overflow indicator. Empty deck falls back to a single secondary
+  dash, same as Swift.
+- **Tab lean (3°).** `DeckPainter.PaintTab` now applies
+  `Matrix3x2.CreateRotation(DeckGeom.Lean(true) * π/180)` around the
+  tab's edge-anchor, then chains the 90° label rotation and the
+  bleed offset. The previous code rotated the label but never leaned the
+  tab.
+- **Drag-lift scale (1.04×).** When `RenderItem.Lifted` is true, the
+  painter scales the tab by 1.04 around the edge-anchor. The view model
+  already sets `Lifted` from `RevealProgressTracker.DraggedNoteId`; the
+  painter now honours it.
+- **Open / hover shadow opacity.** `PaintTab` reads
+  `r.Lifted ? 0.42 : (r.IsOpen || r.Hovering ? 0.32 : 0.22)` and
+  `DrawGeometry` with that alpha — matches the SwiftUI shadow opacity
+  ladder.
+- **Context menu on right-click.** `DeckView.RightTapped` raises
+  `TabRightClicked` for the hit tab. `DeckController.OnTabRightClicked`
+  builds a WinUI `MenuFlyout` with **Pin/Unpin**, **Archive**, **Cycle
+  color**, separator, **Delete** — the same five items as
+  `noteContextMenu` in `DeckViews.swift:758-767`.
+- **Click → state machine wiring.** `DeckController.OnItemPressed`
+  handles the click on every paint item kind: Tab/ChipTab expands
+  (or collapses if already open), EmptyTab / PlusButton creates a
+  note and expands it, MoreTab / CogButton are no-ops until step 6.
+  `OnExpand` sets `View.Reveal.ExpandedNoteId` so the open note
+  renders; `Apply` clears it on every non-Expanded transition and
+  calls `View.Refresh()` so the next paint pass uses the new state.
+- **Expanded note placeholder.** Until the full Markdown editor ships,
+  `DeckViewModel.Render` emits a `RenderItemKind.ExpandedNote` for the
+  open note, sized from `Settings.FloatingNoteWidth/Height`. The
+  painter draws a paper-coloured rounded rect with the title in
+  semi-bold and the body via `CanvasTextLayout`. Identical paper /
+  ink colour and 8 pt corner radius as the preview card; the body
+  text uses a 0x66-alpha dimmed ink so an empty note reads as "(empty)"
+  the same way the SwiftUI editor does.
+
+5 new xUnit tests added (114/114 total).
+
+## Gaps (step 6+ work)
 
 ### Critical (visible app)
 
-- **Pill per-note dashes.** Painter loop uses a fixed `dashCount` of 5; the
-  actual count and per-note colours are in `NoteList` but not yet wired
-  to the painter.
-- **Tab lean** (3° rotation in the SwiftUI view). The pure view model
-  has the angle (`DeckGeom.Lean(onRight)`); the Win2D painter does not
-  yet apply the transform.
-- **Hover effects** (lift on hover, brightness on open, drag-lift
-  animation). Tracked in `RevealProgressTracker.Lifted/Hovering` but the
-  input is not yet wired.
-- **Drag + reorder.** Drag gesture → `RevealProgressTracker.DraggedNoteId`
-  → render with `shift()`. State machine already supports `DragStarted/Ended`.
-- **Hover-preview card** (`.openOnHover` / `.tabPreview` with delays).
-- **Expanded note editor.** Note body rendering is the biggest single
-  remaining piece (Markdown-as-you-type, find bar, autosave, checkbox
-  tasks, etc. — all of `Sources/NoteEditor.swift`).
+- **Hover-preview card timing** (`.openOnHover` / `.tabPreview` with
+  delays). The card paint method exists, but the host does not yet
+  schedule a delayed `Reveal.PreviewNoteId = id` after the configured
+  delay.
+- **Drag + reorder gesture.** `RevealProgressTracker.DraggedNoteId` is
+  read by the view model; the host does not yet translate a WinUI
+  `ManipulationMode` into `OnDragStarted` + the per-frame `DragDy` +
+  `OnDragEnded`.
+- **Expanded note editor.** The placeholder paints title + body
+  without styling. The full Markdown-as-you-type editor, find bar,
+  autosave, checkbox tasks, and per-paragraph direction are all
+  still to come (`Sources/NoteEditor.swift` is ~700 lines).
+- **Library / All Notes window** (`Sources/LibraryWindow.swift`):
+  search across bodies, editable detail pane, archive/restore.
+  The cog / more-tab click handlers currently no-op on it.
+- **Settings window** XAML UI over the existing `SettingsSnapshot`
+  record. The cog click is a no-op until it ships.
 
 ### Behaviour (continues step 2's hooks)
 

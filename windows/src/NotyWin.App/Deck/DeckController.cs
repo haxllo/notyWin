@@ -2,6 +2,9 @@ using NotyWin.App.Geometry;
 using NotyWin.App.Models;
 using NotyWin.Rendering;
 using DeckFrame = NotyWin.App.Geometry.DeckFrame;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace NotyWin.App.Deck;
 
@@ -83,6 +86,10 @@ public sealed class DeckController : IDisposable
             View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
             View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
         }
+        View.PointerEntered += () => OnPointerEntered();
+        View.PointerExited += () => OnPointerExited();
+        View.ItemPressed += (item, x, y) => OnItemPressed(item, x, y);
+        View.TabRightClicked += item => OnTabRightClicked(item);
         Window.Host(View);
         Relayout(display);
         Window.Show();
@@ -143,6 +150,7 @@ public sealed class DeckController : IDisposable
 
     public void OnExpand(string noteId)
     {
+        if (View is not null) View.Reveal.ExpandedNoteId = noteId;
         var d = StateMachine.Process(DeckInput.ExpandNote, Seconds());
         Apply(d);
     }
@@ -154,11 +162,77 @@ public sealed class DeckController : IDisposable
     public void OnDragStarted() => Apply(StateMachine.Process(DeckInput.DragStarted, Seconds()));
     public void OnDragEnded() => Apply(StateMachine.Process(DeckInput.DragEnded, Seconds()));
 
+    /// <summary>Id of the note currently open, or null.</summary>
+    public string? ExpandedNoteId
+    {
+        get
+        {
+            if (StateMachine.State != DeckState.Expanded) return null;
+            if (View?.Reveal.ExpandedNoteId is { } id) return id;
+            return null;
+        }
+    }
+
+    /// <summary>Right-click on a tab. Shows a context menu with the same actions
+    /// as the macOS <c>noteContextMenu</c> — pin, archive, cycle colour, delete.</summary>
+    public void OnTabRightClicked(RenderItem item)
+    {
+        if (item.Note is not { } n) return;
+        var flyout = new MenuFlyout();
+        var pin = new MenuFlyoutItem { Text = n.Pinned ? "Unpin" : "Pin" };
+        pin.Click += (_, _) => Notes?.TogglePin(n.Id);
+        var archive = new MenuFlyoutItem { Text = "Archive" };
+        archive.Click += (_, _) => { if (Notes is not null) { Notes.SetArchived(n.Id, true); OnCollapse(); } };
+        var cycle = new MenuFlyoutItem { Text = "Cycle color" };
+        cycle.Click += (_, _) => Notes?.CycleColor(n.Id);
+        var del = new MenuFlyoutItem { Text = "Delete" };
+        del.Click += (_, _) =>
+        {
+            if (Notes is null) return;
+            Notes.Delete(n.Id, TimeSpan.FromSeconds(10));
+            if (ExpandedNoteId == n.Id) OnCollapse();
+        };
+        flyout.Items.Add(pin);
+        flyout.Items.Add(archive);
+        flyout.Items.Add(cycle);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(del);
+        flyout.ShowAt(View!, new FlyoutShowOptions { Position = new Windows.Foundation.Point(0, 0) });
+    }
+
+    /// <summary>Translate a paint-time hit into a state-machine command.</summary>
+    public void OnItemPressed(RenderItem item, double x, double y)
+    {
+        switch (item.Kind)
+        {
+            case RenderItemKind.Tab:
+            case RenderItemKind.ChipTab:
+                if (item.Note is not { } n) return;
+                if (ExpandedNoteId == n.Id)
+                    OnCollapse();
+                else
+                    OnExpand(n.Id);
+                break;
+            case RenderItemKind.EmptyTab:
+            case RenderItemKind.PlusButton:
+                if (Notes is null) return;
+                var created = Notes.Create();
+                OnExpand(created.Id);
+                break;
+            case RenderItemKind.MoreTab:
+            case RenderItemKind.CogButton:
+                // Library / Settings — step 6.
+                break;
+        }
+    }
+
     // MARK: - Effect application
 
     private void Apply(DeckDecision decision)
     {
         StateMachine.State = decision.Next;
+        if (decision.Next != DeckState.Expanded && View is not null)
+            View.Reveal.ExpandedNoteId = null;
 
         // Cancel any pending deferred work.
         if (Has(decision, DeckEffect.CancelExitWork))
@@ -181,6 +255,7 @@ public sealed class DeckController : IDisposable
 
         if (Has(decision, DeckEffect.StartIdleWatch)) StartIdleWatch();
         if (Has(decision, DeckEffect.StopIdleWatch)) StopIdleWatch();
+        View?.Refresh();
     }
 
     private static bool Has(DeckDecision d, DeckEffect effect) => d.Effects.Contains(effect);

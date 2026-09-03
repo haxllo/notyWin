@@ -31,16 +31,18 @@ public sealed class DeckView : UserControl
     public event Action<double, double>? PointerMovedOnPanel;
     public event Action? PointerEntered;
     public event Action? PointerExited;
+    public event Action<RenderItem>? TabRightClicked;
 
     public DeckView()
     {
         _canvas = new CanvasControl();
         _canvas.Draw += OnDraw;
         _canvas.IsHitTestVisible = true;
-        _canvas.PointerMoved += (s, e) => OnPointer(e, isEnter: false);
+        _canvas.PointerMoved += (s, e) => OnPointerMoved(e);
         _canvas.PointerEntered += (s, e) => PointerEntered?.Invoke();
         _canvas.PointerExited += (s, e) => PointerExited?.Invoke();
         _canvas.PointerPressed += (s, e) => OnPointerPressed(e);
+        _canvas.RightTapped += (s, e) => OnRightTapped(e);
         Content = _canvas;
     }
 
@@ -66,7 +68,7 @@ public sealed class DeckView : UserControl
         _painter.Paint(args.DrawingSession, _frame, sender.ActualWidth);
     }
 
-    private void OnPointer(PointerRoutedEventArgs e, bool isEnter)
+    private void OnPointerMoved(PointerRoutedEventArgs e)
     {
         if (_frame is null || ViewModel is null) return;
         var p = e.GetCurrentPoint(_canvas).Position;
@@ -83,6 +85,15 @@ public sealed class DeckView : UserControl
         var hit = HitTest.Test(p.X, p.Y, _frame, _canvas.ActualWidth, OnRightEdge);
         if (hit is { } h)
             ItemPressed?.Invoke(h.Item, p.X, p.Y);
+    }
+
+    private void OnRightTapped(RightTappedRoutedEventArgs e)
+    {
+        if (_frame is null) return;
+        var p = e.GetPosition(_canvas);
+        var hit = HitTest.Test(p.X, p.Y, _frame, _canvas.ActualWidth, OnRightEdge);
+        if (hit is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } h)
+            TabRightClicked?.Invoke(h.Item);
     }
 }
 
