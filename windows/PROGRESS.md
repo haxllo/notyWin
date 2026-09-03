@@ -13,8 +13,8 @@ the macOS app).
 
 ```
 cd windows
-dotnet build NotyWin.slnx   # 0 errors (1 transitive advisory warning)
-dotnet test  NotyWin.slnx   # 109/109 pass
+dotnet build NotyWin.slnx   # 0 errors
+dotnet test  NotyWin.slnx   # 114/114 pass
 ```
 
 Requires .NET 10 SDK + Windows App SDK 2.4 + Microsoft.WindowsAppSDK.WinUI
@@ -43,7 +43,7 @@ of `Sources/DeckPanel.swift`.
 
 | File | Mac source | Notes |
 |---|---|---|
-| `NotyWin.App/Deck/DeckWindow.cs` | `DeckPanel` (NSPanel) | `WS_POPUP \| WS_VISIBLE` + `WS_EX_TOOLWINDOW \| WS_EX_NOACTIVATE \| WS_EX_LAYERED`. `ApplyLevel(overFullScreen)` swaps `HWND_TOPMOST` ↔ `HWND_TOP`. `Show` uses `SW_SHOWNOACTIVATE`. Now also hosts WinUI 3 content via `DesktopWindowXamlSource` (mirrors `NSHostingView`). |
+| `NotyWin.App/Deck/DeckWindow.cs` | `DeckPanel` (NSPanel) | Borderless tool window via `WS_POPUP`. Per-display `Microsoft.UI.Xaml.Window` for WinUI 3 content. Transparent helper HWND (`WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT`) covers the right edge for mouse input via `SetWindowSubclass`. Handles `WM_SETCURSOR` to force arrow cursor. |
 | `NotyWin.App/Deck/DeckController.cs` | `DeckController` | One-per-display. Owns `DeckWindow` + `DeckStateMachine` + `DeckModel` + `DeckView`. Hosts the 120 ms idle timer, the 150 ms deferred pointer-exit timer, and turns state-machine effects into `Window.ApplyLevel/Show/Hide` + idle-watch start/stop. |
 | `NotyWin.App/Deck/DeckManager.cs` | `DeckManager` | Manages the set of `DeckController`s keyed by display id. |
 | `NotyWin.App/Deck/DisplayEnumerator.cs` | `NSScreen.screens` | `EnumDisplayMonitors` + `GetMonitorInfo` with both `rcMonitor` and `rcWork`. |
@@ -115,7 +115,7 @@ Tests: 25 xUnit. Cover render-with-empty-deck, render-with-N-notes, compact-styl
 | `.canJoinAllSpaces + .fullScreenAuxiliary` | inherent to TOPMOST (no spaces) |
 | `.ignoresCycle` | `WS_EX_TOOLWINDOW` |
 | `canBecomeKey=true, canBecomeMain=false` | `WS_EX_NOACTIVATE` + `ShowWindow(SW_SHOWNOACTIVATE)` |
-| `NSHostingView` | `DesktopWindowXamlSource` + `InitializeWithWindow` |
+| `NSHostingView` | Per-display `Microsoft.UI.Xaml.Window` (each creates its own `WindowsXamlManager`) |
 | SwiftUI `View.body` returns `some View` | WinUI 3 `FrameworkElement` (UserControl / CanvasControl) |
 | SwiftUI `ZStack` for shingle | Win2D `CanvasDrawingSession.FillGeometry` in declaration order (lap from overdraw) |
 | SwiftUI `.rotationEffect(.degrees(90))` | Win2D `Matrix3x2.CreateRotation(90, ...)` |
@@ -216,6 +216,24 @@ PR conversation can address them if/when a PR happens.
   value for SemiBold). Visually identical to `FontWeights.SemiBold` when
   that helper is present.
 
+### 13. Transparent helper HWND for mouse input (new)
+
+- The macOS app uses `NSPanel`'s built-in pointer tracking. WinUI 3's
+  XAML composition routes mouse to a separate input site, so neither
+  `SetWindowLongPtr(GWLP_WNDPROC)` nor `WH_MOUSE_LL` worked reliably.
+  A `WS_EX_TRANSPARENT` helper window, subclassed with `SetWindowSubclass`
+  from ComCtl32, receives `WM_MOUSEMOVE` only when the cursor is over
+  the right edge — no system-wide hook overhead.
+
+### 14. Fan panel narrower than Expanded (new)
+
+- The macOS app uses the same panel width for both Fan and Expanded to
+  prevent the deck from resizing. On Windows, the Fan panel uses
+  `FanWidth` (50pt) — just wide enough for tab edges — while Expanded
+  uses `ExpandedWidth(noteWidth)` (382+ pt) for the open note. This
+  avoids the fan panel being 482px wide, which pushed the cursor far
+  from the screen edge and broke hot-zone exit detection.
+
 ---
 
 ### Step 5 — Visual polish + interaction wiring
@@ -295,6 +313,70 @@ minimum scaffolding so `dotnet run` shows the per-display deck HWNDs.
 `dotnet build` produces `NotyWin.App.exe` (162 KB). Run with
 `dotnet run --project windows\src\NotyWin.App` from the repo root.
 
+### Step 6b — First runnable build (per-display WinUI 3 Window)
+
+- **Pivoted from `DesktopWindowXamlSource`** to per-display
+  `Microsoft.UI.Xaml.Window` instances. The XAML island approach failed
+  because only one `WindowsXamlManager` can exist per thread, and each
+  display deck needed its own. Per-window content works because each
+  `Window` creates its own `WindowsXamlManager` internally.
+- **`OverlappedPresenter`** for borderless chrome: `SetBorderAndTitleBar(false, false)`
+  drops the title bar while keeping the window moveable.
+
+### Step 6c — Borderless chrome + drop Hide effect
+
+- **`WS_POPUP` style swap** in the DeckWindow constructor after
+  `SetBorderAndTitleBar(true, false)`. The OverlappedPresenter alone
+  reserves 100+ pt for the close button; `WS_POPUP` gives a true
+  borderless pill.
+- **Hide effect is a no-op on Windows.** macOS hides the panel to
+  re-trigger from the menu bar; Windows has no equivalent, so the pill
+  is always visible.
+- **WndProc subclass** via `SetWindowLongPtr(GWLP_WNDPROC)` attempted
+  for mouse events. Failed: WinUI 3's XAML composition routes mouse
+  to a separate input site, so the subclass never received
+  `WM_MOUSEMOVE`.
+
+### Step 6d — WH_MOUSE_LL global hook
+
+- **`WH_MOUSE_LL` hook** installed in the DeckWindow constructor.
+  Fires on every mouse event system-wide; hit-tests against the
+  deck's screen rect. Worked but had two problems: (a) slowed the
+  entire system to a crawl, (b) `CallWindowProc` return type mismatch
+  fixed from `int` to `IntPtr`.
+- **`ShowWindow(SW_SHOWNOACTIVATE)`** for the deck window to avoid
+  stealing focus from the foreground app.
+
+### Step 6e — Fix deck input + rendering pipeline
+
+- **Replaced `WH_MOUSE_LL`** with per-window `SetWindowSubclass` on a
+  transparent helper HWND (`WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT`).
+  The helper covers the right edge of the screen and receives
+  `WM_MOUSEMOVE` only when the cursor is over it — no system-wide
+  overhead.
+- **Missing `ShowFan` effect** in state machine `OnPointerEntered`
+  transition. The panel now resizes to fan dimensions on hover.
+- **ViewModel wiring** — `WireViewModel()` called after `Notes`/`Settings`
+  are assigned on `DeckController`. Previously `View.ViewModel` was null
+  at construction, causing `OnDraw` to skip everything.
+- **`DispatcherQueue` marshaling** for idle timer and exit-work timer
+  callbacks that fire on thread pool threads. Without this,
+  `MoveAndResize` and `CanvasControl.Invalidate` crashed or were
+  ignored.
+- **Coordinate-based enter/exit detection** (`lx >= -2`) replaces
+  unreliable `WM_MOUSELEAVE` on `WS_EX_TRANSPARENT` windows.
+- **Fan panel narrow** — uses `FanWidth` (50pt) instead of
+  `ExpandedWidth(noteWidth)` (482pt). The fan is a strip of tab edges,
+  not the full note width.
+- **`ShowPill` effect** added to all Rest transitions so the panel
+  shrinks back to pill size on collapse.
+- **`WM_SETCURSOR` handler** on the helper window to force arrow cursor
+  (prevents horizontal-resize cursor on the `WS_POPUP` helper).
+- **Updated test** `FanAndExpanded_SamePanelSize` →
+  `FanPanel_IsNarrowerThanExpanded` to reflect the narrower fan.
+
+### Step 6f — continued
+
 ## Gaps (step 6b+ work)
 
 ### Critical (visible app)
@@ -319,10 +401,13 @@ minimum scaffolding so `dotnet run` shows the per-display deck HWNDs.
 
 ### Behaviour (continues step 2's hooks)
 
-- **Pointer enter/exit on the panel.** Win32 `WM_MOUSEMOVE` + `TrackMouseEvent`.
-  The state machine already handles the rest. The current `DeckView`
-  exposes `PointerEntered/Exited` events but the `DeckController` does
-  not yet subscribe.
+- **Pointer enter/exit on the panel.** Implemented via a transparent helper
+  HWND (`WS_EX_TRANSPARENT`) covering the right edge, subclassed with
+  `SetWindowSubclass` from ComCtl32. Coordinate-based enter/exit detection
+  (`lx >= -2`) replaces unreliable `WM_MOUSELEAVE` on transparent windows.
+  Previous attempts: `SetWindowLongPtr(GWLP_WNDPROC)` subclass failed
+  because WinUI 3 XAML composition routes mouse to a separate input site;
+  `WH_MOUSE_LL` global hook worked but slowed the entire system to a crawl.
 - **Pill drag** (`beginPillDrag`). `SetCapture` + `WM_MOUSEMOVE`/`WM_LBUTTONUP`
   pump, hit-tests against current display.
 - **Outside-click on the floating note** to dismiss.
@@ -413,3 +498,9 @@ windows/
 | `400317b` | deck state machine + multi-display + hot zone |
 | `c49b13b` | settings + storage + note model (step 3) |
 | (next) | rendering lib + WinUI 3 visible views (step 4) |
+| ... | steps 4-5 (rendering, visual polish) |
+| `08cecf6` | step 6a runtime glue (runnable build) |
+| `a0a93f2` | step 6b first runnable build (per-display WinUI 3 Window) |
+| `fd7c5eb` | step 6c fix borderless chrome + drop Hide effect |
+| `79b0b75` | step 6d fix WndProc + drop focus steal |
+| `8690a67` | step 6e fix deck input + rendering pipeline |
