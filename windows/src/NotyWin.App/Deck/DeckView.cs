@@ -42,11 +42,12 @@ public sealed class DeckView : UserControl
     {
         _canvas = new CanvasControl
         {
-            // Transparent so the XAML host's background doesn't bleed
-            // through as a hard rectangle behind the pill.
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
         _canvas.Draw += OnDraw;
+        _canvas.SizeChanged += OnCanvasSizeChanged;
         _overlay.Children.Add(_editor);
         _root.Children.Add(_canvas);
         _root.Children.Add(_overlay);
@@ -127,17 +128,29 @@ public sealed class DeckView : UserControl
         ShowExpanded = false,
     };
 
+    private void OnCanvasSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        _panelW = e.NewSize.Width;
+        _panelH = e.NewSize.Height;
+        _frame = null;
+        _canvas.Invalidate();
+    }
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (ViewModel is null) return;
-        // Resize() is authoritative for panel size; only backfill if a draw
-        // races ahead of the first relayout.
-        if (_panelW <= 0) _panelW = sender.ActualWidth;
-        if (_panelH <= 0) _panelH = sender.ActualHeight;
+        // Always use the canvas's actual size — it's the ground truth after
+        // the WinUI 3 layout pass completes.
+        var w = sender.ActualWidth;
+        var h = sender.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+        _panelW = w;
+        _panelH = h;
         var now = Environment.TickCount / 1000.0;
-        _frame ??= ViewModel.Render(_panelH, _panelW, LabelCacheSingleton.Get(), Reveal, now);
-        DeckLog.Write("VIEW", $"OnDraw w={_panelW:F0} h={_panelH:F0} items={_frame.Items.Count} fan={_frame.FanVisible} pill={_frame.PillVisible}");
-        _painter.Paint(args.DrawingSession, _frame, _panelW);
+        var frame = ViewModel.Render(h, w, LabelCacheSingleton.Get(), Reveal, now);
+        _frame = frame;
+        DeckLog.Write("VIEW", $"OnDraw w={w:F0} h={h:F0} items={frame.Items.Count} fan={frame.FanVisible} pill={frame.PillVisible}");
+        _painter.Paint(args.DrawingSession, frame, w);
     }
 }
 
