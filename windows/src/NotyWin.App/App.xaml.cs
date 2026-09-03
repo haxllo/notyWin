@@ -124,18 +124,21 @@ public partial class App : Application
                     Log("UndoToast created");
 
                     var hotkeys = new GlobalHotKeys();
+                    var quickCapture = new QuickCaptureWindow(notes, DispatcherQueue);
                     hotkeys.OnNewNote = () =>
                     {
                         var created = notes.Create();
-                        // Expand on the focused deck (where the mouse is).
                         var (cx, cy) = DeckWindow.CursorPos();
                         var displays = DisplayEnumerator.Snapshot();
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
+                    hotkeys.OnCapture = () => quickCapture.Toggle();
+                    hotkeys.OnAllNotes = () => { /* LibraryWindow — step 9 */ };
+                    hotkeys.OnArchive = () => { /* LibraryWindow archive mode — step 9 */ };
                     hotkeys.RegisterFromSettings(settings.Load());
                     settings.Changed += s => hotkeys.RegisterFromSettings(s);
-                    Log("GlobalHotKeys registered");
+                    Log("GlobalHotKeys + QuickCapture wired");
 
                     var tray = new TrayIcon();
                     tray.OnNewNote = () =>
@@ -146,6 +149,9 @@ public partial class App : Application
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
+                    tray.OnAllNotes = () => { /* LibraryWindow — step 9 */ };
+                    tray.OnArchive = () => { /* LibraryWindow — step 9 */ };
+                    tray.OnSettings = () => { /* SettingsWindow — step 9 */ };
                     tray.OnQuit = () =>
                     {
                         manager.Dispose();
