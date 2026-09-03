@@ -123,6 +123,20 @@ public partial class App : Application
                     var undoToast = new UndoToast(notes, DispatcherQueue);
                     Log("UndoToast created");
 
+                    var hotkeys = new GlobalHotKeys();
+                    hotkeys.OnNewNote = () =>
+                    {
+                        var created = notes.Create();
+                        // Expand on the focused deck (where the mouse is).
+                        var (cx, cy) = DeckWindow.CursorPos();
+                        var displays = DisplayEnumerator.Snapshot();
+                        var deck = manager.FocusAt(cx, cy, displays);
+                        deck?.OnExpand(created.Id);
+                    };
+                    hotkeys.RegisterFromSettings(settings.Load());
+                    settings.Changed += s => hotkeys.RegisterFromSettings(s);
+                    Log("GlobalHotKeys registered");
+
                     foreach (var d in manager.Decks.Values)
                     {
                         d.Window.Show();
