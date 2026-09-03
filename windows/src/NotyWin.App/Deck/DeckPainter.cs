@@ -41,6 +41,10 @@ public sealed class DeckPainter
         {
             DeckLog.Write("PAINT", $"  {ri.Kind} ({ri.X},{ri.Y}) {ri.Width}x{ri.Height} note={ri.Note?.Id?[..8]}");
         }
+        // Debug: paint a magenta border around the whole panel so the user can see its actual size.
+        ds.DrawRectangle(0, 0, (float)panelWidth, frame.Items.Count > 0
+            ? (float)frame.Items.Max(i => i.Y + i.Height)
+            : 100, Color.FromArgb(0xFF, 0xFF, 0, 0xFF), 2);
         foreach (var ri in frame.Items)
         {
             switch (ri.Kind)
