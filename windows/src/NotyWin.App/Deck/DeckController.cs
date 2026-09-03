@@ -86,11 +86,16 @@ public sealed class DeckController : IDisposable
             View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
             View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
         }
+        // The XAML tree root is the DeckView itself; setting it as the
+        // window content is what wires the per-display HWND to the shared
+        // WindowsXamlManager. (Previously this went through
+        // DesktopWindowXamlSource, which collided with the main thread's
+        // WindowsXamlManager.)
+        Window.Window.Content = View;
         View.PointerEntered += () => OnPointerEntered();
         View.PointerExited += () => OnPointerExited();
         View.ItemPressed += (item, x, y) => OnItemPressed(item, x, y);
         View.TabRightClicked += item => OnTabRightClicked(item);
-        Window.Host(View);
         Relayout(display);
         Window.Show();
     }
@@ -293,6 +298,6 @@ public sealed class DeckController : IDisposable
         _exitWork = null;
         StopIdleWatch();
         Window.Hide();
-        Window.Dispose();
+        Window.Window.Close();
     }
 }

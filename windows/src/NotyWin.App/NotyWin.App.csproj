@@ -32,6 +32,20 @@
   </ItemGroup>
 
   <!--
+    Self-contained WinAppSDK: ship the runtime DLLs next to NotyWin.App.exe.
+    Avoids relying on the Windows App Runtime installer being present and on a
+    matching version, which fails with REGDB_E_CLASSNOTREG when a module
+    auto-initializer in the SDK probes a runtime class the installed WAR
+    doesn't expose.
+  -->
+  <PropertyGroup>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <EnableMsixTooling>true</EnableMsixTooling>
+  </PropertyGroup>
+
+  <!--
     Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
     Tools extension to be activated for this project even if the Windows App SDK Nuget
     package has not yet been restored.

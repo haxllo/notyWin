@@ -92,7 +92,6 @@ public sealed class DeckManager : IDisposable
             }
         }
     }
-
     /// <summary>Forces a full re-sync after settings change (e.g. scale).</summary>
     public void OnSettingsChanged()
     {

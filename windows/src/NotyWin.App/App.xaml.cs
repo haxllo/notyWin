@@ -20,69 +20,119 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+    }
+
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"NotyWin UnhandledException: {e.Exception}");
+        System.IO.File.AppendAllText(
+            System.IO.Path.Combine(
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+                "Noty", "crash.log"),
+            $"[{DateTime.UtcNow:O}] UI unhandled: {e.Exception}\n");
+        e.Handled = true;
+    }
+
+    private static void OnDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"NotyWin Domain UnhandledException: {e.ExceptionObject}");
+        try
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+                    "Noty", "crash.log"),
+                $"[{DateTime.UtcNow:O}] domain unhandled: {e.ExceptionObject}\n");
+        }
+        catch { }
     }
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        // Windows App SDK 1.7+ requires an explicit version pin when running
-        // unpackaged. 1.7 matches our referenced Microsoft.WindowsAppSDK 2.4.0
-        // (which exposes runtime 1.7). See
-        // https://learn.microsoft.com/windows/apps/windows-app-sdk/stable-channel
-        const uint WarVersion = 0x00010007;   // 1.7
+        // Log early so silent failures are visible.
+        var logPath = System.IO.Path.Combine(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+            "Noty", "startup.log");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath)!);
+        var sw = new System.IO.StreamWriter(logPath, append: true) { AutoFlush = true };
+        void Log(string s) { sw.WriteLine($"[{DateTime.UtcNow:O}] {s}"); }
+
         try
         {
-            Microsoft.Windows.ApplicationModel.DynamicDependency.Bootstrap.Initialize(WarVersion);
+            Log("OnLaunched entered");
+            // WAR auto-initializer (from Microsoft.WindowsAppSDK NuGet) runs at
+            // module load and pinned to the runtime version that ships with
+            // the SDK (2.4 in our case). No explicit Bootstrap.Initialize
+            // needed for self-contained deployment.
+
+            DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            Log("DispatcherQueue acquired");
+
+            var dataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Noty");
+            Directory.CreateDirectory(dataDir);
+            var settingsPath = Path.Combine(dataDir, "settings.json");
+            var dbPath = Path.Combine(dataDir, "notes.db");
+            var keyPath = Path.Combine(dataDir, "note.key.dpapi");
+
+            var settings = new JsonSettingsStore(settingsPath);
+            Log($"Settings store OK: {settingsPath}");
+            var persistence = new SqliteNotePersistence(dbPath, keyPath);
+            Log("Persistence OK");
+            var notes = new NoteList(persistence.LoadAll());
+            Log($"Loaded {notes.Notes.Count} notes");
+            var manager = new DeckManager(notes, settings);
+            Services = new IService(settings, persistence, notes, manager);
+            Log("DeckManager constructed");
+
+            // Defer the part that touches XAML islands until after OnLaunched
+            // returns. The XAML host attaches to the process during the
+            // OnLaunched -> MainWindow.Activate() handshake; until that
+            // finishes, DesktopWindowXamlSource cannot be initialized.
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+            {
+                try
+                {
+                    Log("Deferred phase: constructing MainWindow");
+                    Window = new MainWindow();
+                    Log("MainWindow constructed");
+                    Window.Activate();
+                    Log("MainWindow activated");
+                    Window.SetStatus(BuildDisplaysText(manager), notes.ActiveCount);
+
+                    var watcher = new DisplayChangeWatcher();
+                    watcher.Changed += () =>
+                    {
+                        var displays = manager.RefreshDisplays();
+                        Window.SetStatus(BuildDisplaysText(manager), notes.ActiveCount);
+                    };
+                    Log("DisplayChangeWatcher set up");
+
+                    manager.RefreshDisplays();
+                    Log($"RefreshDisplays: {manager.Decks.Count} decks");
+
+                    notes.Subscribe(new PersistOnChange(persistence));
+
+                    foreach (var d in manager.Decks.Values)
+                    {
+                        d.Window.Show();
+                    }
+                    Log("All deck windows shown");
+                }
+                catch (Exception ex)
+                {
+                    Log($"Deferred phase FAILED: {ex}");
+                }
+            });
         }
         catch (Exception ex)
         {
-            // Surface the failure rather than silently exiting.
-            System.Diagnostics.Debug.WriteLine($"NotyWin: WAR bootstrap failed ({ex.HResult}): {ex.Message}");
+            Log($"OnLaunched FAILED: {ex}");
+            sw.Close();
             throw;
-        }
-
-        DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-
-        // Build the service graph. Settings + persistence live on disk;
-        // NoteList is the in-memory model the rest of the app reads from.
-        var dataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Noty");
-        Directory.CreateDirectory(dataDir);
-        var settingsPath = Path.Combine(dataDir, "settings.json");
-        var dbPath = Path.Combine(dataDir, "notes.db");
-        var keyPath = Path.Combine(dataDir, "note.key.dpapi");
-
-        var settings = new JsonSettingsStore(settingsPath);
-        var persistence = new SqliteNotePersistence(dbPath, keyPath);
-        var notes = new NoteList(persistence.LoadAll());
-        var manager = new DeckManager(notes, settings);
-        Services = new IService(settings, persistence, notes, manager);
-
-        Window = new MainWindow();
-        Window.Activate();
-        Window.SetStatus(BuildDisplaysText(manager), notes.ActiveCount);
-
-        // Watch for hot-plug.
-        var watcher = new DisplayChangeWatcher();
-        watcher.Changed += () =>
-        {
-            var displays = manager.RefreshDisplays();
-            Window.SetStatus(BuildDisplaysText(manager), notes.ActiveCount);
-        };
-
-        // Build per-display decks on the first refresh.
-        manager.RefreshDisplays();
-
-        // Persist notes on every change. The NoteList is observable, so we
-        // subscribe once and write through. The debounce on the in-app
-        // editor isn't wired yet (step 7); for now every mutation hits
-        // SQLite immediately, which is fine for a 0.1s button feedback.
-        notes.Subscribe(new PersistOnChange(persistence));
-
-        // Show per-display decks.
-        foreach (var d in manager.Decks.Values)
-        {
-            d.Window.Show();
         }
     }
 
