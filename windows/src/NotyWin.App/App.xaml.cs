@@ -120,6 +120,9 @@ public partial class App : Application
 
                     notes.Subscribe(new PersistOnChange(persistence));
 
+                    var undoToast = new UndoToast(notes, DispatcherQueue);
+                    Log("UndoToast created");
+
                     foreach (var d in manager.Decks.Values)
                     {
                         d.Window.Show();
