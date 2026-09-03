@@ -35,7 +35,12 @@ public sealed class DeckView : UserControl
 
     public DeckView()
     {
-        _canvas = new CanvasControl();
+        _canvas = new CanvasControl
+        {
+            // Transparent so the XAML host's background doesn't bleed
+            // through as a hard rectangle behind the pill.
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+        };
         _canvas.Draw += OnDraw;
         _canvas.IsHitTestVisible = true;
         _canvas.PointerMoved += (s, e) => OnPointerMoved(e);
@@ -49,15 +54,25 @@ public sealed class DeckView : UserControl
     public void Refresh()
     {
         _frame = null;
+        Log("Refresh: invalidate called");
         _canvas.Invalidate();
     }
 
     /// <summary>Re-render after a panel size change.</summary>
     public void Resize(double panelWidth, double panelHeight)
     {
+        Log($"Resize: {panelWidth:F0}x{panelHeight:F0}");
         _canvas.Width = panelWidth;
         _canvas.Height = panelHeight;
         _canvas.Invalidate();
+    }
+
+    private static void Log(string msg)
+    {
+        System.IO.File.AppendAllText(
+            System.IO.Path.Combine(System.Environment.GetFolderPath(
+                System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
+            $"[{DateTime.UtcNow:O}] VIEW: {msg}\n");
     }
 
     /// <summary>Compute the current frame for hit-testing without going through the XAML draw path.</summary>
@@ -76,9 +91,14 @@ public sealed class DeckView : UserControl
 
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        if (ViewModel is null) return;
+        if (ViewModel is null)
+        {
+            Log("OnDraw: ViewModel=null, skipping");
+            return;
+        }
         var cache = LabelCacheSingleton.Get();
         _frame ??= ViewModel.Render(sender.ActualWidth, sender.ActualHeight, cache, Reveal);
+        Log($"OnDraw: w={sender.ActualWidth:F0} h={sender.ActualHeight:F0} items={_frame.Items.Count} fan={_frame.FanVisible} pill={_frame.PillVisible}");
         _painter.Paint(args.DrawingSession, _frame, sender.ActualWidth);
     }
 

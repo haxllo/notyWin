@@ -48,6 +48,7 @@ public static class DeckFrame
         return state switch
         {
             DeckState.Rest => Rest(noteCount, display, onLeftEdge, edgeWidth, deckYRatio),
+            DeckState.Fan => Fan(display, onLeftEdge),
             _ => FanOrExpanded(noteWidth, display, onLeftEdge),
         };
     }
@@ -74,6 +75,20 @@ public static class DeckFrame
         return new DeckLayoutResult
         {
             X = x, Y = yWin, Width = w, Height = h,
+        };
+    }
+
+    private static DeckLayoutResult Fan(
+        DisplayRect display, bool onLeftEdge)
+    {
+        // The fan panel is narrow — just wide enough for the tab edges to
+        // peek out from behind each other. FanWidth (50pt) matches the
+        // macOS app's panel width in Fan state.
+        var w = DeckGeom.FanWidth;
+        var x = onLeftEdge ? display.FullLeft : display.FullRight - w;
+        return new DeckLayoutResult
+        {
+            X = x, Y = display.VisTop, Width = w, Height = display.VisHeight,
         };
     }
 

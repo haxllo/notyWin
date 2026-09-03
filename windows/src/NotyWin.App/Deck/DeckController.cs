@@ -2,6 +2,7 @@ using NotyWin.App.Geometry;
 using NotyWin.App.Models;
 using NotyWin.Rendering;
 using DeckFrame = NotyWin.App.Geometry.DeckFrame;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -66,6 +67,7 @@ public sealed class DeckController : IDisposable
     private DisplayRect _display;
     private bool _showOverFullScreen;
     private bool _disposed;
+    private readonly DispatcherQueue _dispatcher;
 
     public DeckController(uint displayId, DisplayRect display, bool showOverFullScreen)
     {
@@ -74,6 +76,7 @@ public sealed class DeckController : IDisposable
         _showOverFullScreen = showOverFullScreen;
         Window = new DeckWindow();
         Window.ApplyLevel(showOverFullScreen);
+        _dispatcher = Window.Window.DispatcherQueue;
         StateMachine.RestingState = Model.DeckAlwaysShown ? DeckState.Fan : DeckState.Rest;
         StateMachine.State = StateMachine.RestingState;
 
@@ -109,6 +112,16 @@ public sealed class DeckController : IDisposable
         // window at its default 800x600 size and the resize doesn't take.
         Relayout(display);
         Window.Show();
+    }
+
+    public void WireViewModel()
+    {
+        if (Notes is not null && Settings is not null && View is not null)
+        {
+            View.ViewModel = new DeckViewModel(Notes, () => Settings.Load());
+            View.OnRightEdge = !Settings.Load().DeckOnLeftEdge;
+            Log($"WireViewModel: notes={Notes.ActiveCount} items");
+        }
     }
 
     private void OnRawPointerMoved(double x, double y)
@@ -181,8 +194,11 @@ public sealed class DeckController : IDisposable
         _exitWork?.Dispose();
         _exitWork = new System.Threading.Timer(_ =>
         {
-            var d = StateMachine.Process(DeckInput.PointerExitedHotZone, Seconds());
-            Apply(d);
+            _dispatcher.TryEnqueue(() =>
+            {
+                var d = StateMachine.Process(DeckInput.PointerExitedHotZone, Seconds());
+                Apply(d);
+            });
         }, null, 150, System.Threading.Timeout.Infinite);
     }
 
@@ -279,6 +295,9 @@ public sealed class DeckController : IDisposable
     private void Apply(DeckDecision decision)
     {
         StateMachine.State = decision.Next;
+        var effectNames = string.Join(",", decision.Effects.Select(e => e.ToString()));
+        Log($"Apply: state={decision.Next} effects=[{effectNames}]");
+
         if (decision.Next != DeckState.Expanded && View is not null)
             View.Reveal.ExpandedNoteId = null;
 
@@ -310,6 +329,14 @@ public sealed class DeckController : IDisposable
 
     private static double Seconds() => Environment.TickCount / 1000.0;
 
+    private static void Log(string msg)
+    {
+        System.IO.File.AppendAllText(
+            System.IO.Path.Combine(System.Environment.GetFolderPath(
+                System.Environment.SpecialFolder.LocalApplicationData), "Noty", "wndproc.log"),
+            $"[{DateTime.UtcNow:O}] CTRL: {msg}\n");
+    }
+
     // MARK: - Idle watch
 
     private void StartIdleWatch()
@@ -318,8 +345,11 @@ public sealed class DeckController : IDisposable
         _idleTimer = new System.Timers.Timer(120) { AutoReset = true };
         _idleTimer.Elapsed += (_, _) =>
         {
-            var d = StateMachine.Process(DeckInput.IdleTick, Seconds());
-            Apply(d);
+            _dispatcher.TryEnqueue(() =>
+            {
+                var d = StateMachine.Process(DeckInput.IdleTick, Seconds());
+                Apply(d);
+            });
         };
         _idleTimer.Start();
     }

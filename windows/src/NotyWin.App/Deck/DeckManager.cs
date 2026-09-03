@@ -77,11 +77,10 @@ public sealed class DeckManager : IDisposable
         {
             if (!_decks.ContainsKey(id) && displays.TryGetValue(id, out var disp))
             {
-                var controller = new DeckController(id, disp, s.ShowOverFullScreen)
-                {
-                    Notes = _notes,
-                    Settings = _settings,
-                };
+                var controller = new DeckController(id, disp, s.ShowOverFullScreen);
+                controller.Notes = _notes;
+                controller.Settings = _settings;
+                controller.WireViewModel();
                 controller.Model.SyncPreferences(s);
                 controller.Model.NoteCount = _notes.ActiveCount;
                 _decks[id] = controller;

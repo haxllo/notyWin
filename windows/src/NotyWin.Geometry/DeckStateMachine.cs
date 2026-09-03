@@ -116,6 +116,7 @@ public sealed class DeckStateMachine
         LastActivity = now;
         if (State == DeckState.Rest)
             return TransitionTo(DeckState.Fan,
+                DeckEffect.ShowFan,
                 DeckEffect.CancelExitWork,
                 DeckEffect.CancelShrinkWork,
                 DeckEffect.DeactivateSiblingDecks,
@@ -138,7 +139,7 @@ public sealed class DeckStateMachine
     private DeckDecision OnPointerExitedHotZone()
     {
         if (State != DeckState.Fan || RestingState == DeckState.Fan) return Stay();
-        return TransitionTo(RestingState, DeckEffect.StopIdleWatch, DeckEffect.Hide);
+        return TransitionTo(RestingState, DeckEffect.StopIdleWatch, DeckEffect.ShowPill, DeckEffect.Hide);
     }
 
     // MARK: - Commands
@@ -163,6 +164,7 @@ public sealed class DeckStateMachine
         // From fan or rest: collapse to resting.
         return TransitionTo(RestingState,
             DeckEffect.StopIdleWatch,
+            DeckEffect.ShowPill,
             DeckEffect.Hide);
     }
 
@@ -172,6 +174,7 @@ public sealed class DeckStateMachine
         FindQuery = null;
         var dec = TransitionTo(RestingState,
             DeckEffect.StopIdleWatch,
+            DeckEffect.ShowPill,
             DeckEffect.Hide);
         if (wasExpanded)
         {
@@ -220,6 +223,7 @@ public sealed class DeckStateMachine
             if (now - LastActivity > FanIdleTimeout)
                 return TransitionTo(RestingState,
                     DeckEffect.StopIdleWatch,
+                    DeckEffect.ShowPill,
                     DeckEffect.Hide);
         }
         if (State == DeckState.Expanded && !PinnedNoteOpen)
@@ -227,6 +231,7 @@ public sealed class DeckStateMachine
             if (now - LastActivity > NoteIdleTimeout)
                 return TransitionTo(RestingState,
                     DeckEffect.StopIdleWatch,
+                    DeckEffect.ShowPill,
                     DeckEffect.Hide,
                     DeckEffect.DeactivateApp);
         }

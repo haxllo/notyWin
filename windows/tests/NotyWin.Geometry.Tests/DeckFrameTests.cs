@@ -55,7 +55,7 @@ public class DeckFrameTests
     }
 
     [Fact]
-    public void FanAndExpanded_SamePanelSize()
+    public void FanPanel_IsNarrowerThanExpanded()
     {
         DeckGeom.Scale = 1.0;
         var d = MakeDisplay(0, 0, 1920, 1080, 0, 0, 1920, 1040);
@@ -63,12 +63,15 @@ public class DeckFrameTests
                                    noteCount: 3, noteWidth: 360, edgeWidth: 28, deckYRatio: 0.5);
         var expanded = DeckFrame.Layout(DeckState.Expanded, d, onLeftEdge: false,
                                         noteCount: 3, noteWidth: 360, edgeWidth: 28, deckYRatio: 0.5);
-        // Same width for both — prevents the deck from resizing and "flying in".
-        Assert.Equal(fan.Width, expanded.Width);
-        Assert.Equal(fan.Height, expanded.Height);
-        Assert.Equal(fan.X, expanded.X);
-        Assert.Equal(fan.Y, expanded.Y);
+        // Fan is narrow (just tab edges), Expanded is wide (note + tab gutter).
+        Assert.True(fan.Width < expanded.Width,
+            $"Fan width {fan.Width} should be less than Expanded width {expanded.Width}");
+        // Both span full visible height.
+        Assert.Equal(d.VisHeight, fan.Height);
         Assert.Equal(d.VisHeight, expanded.Height);
+        // Both docked to the right edge.
+        Assert.Equal(d.FullRight - fan.Width, fan.X);
+        Assert.Equal(d.FullRight - expanded.Width, expanded.X);
     }
 
     [Fact]
