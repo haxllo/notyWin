@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NotyWin.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NotyWin.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
