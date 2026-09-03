@@ -1,4 +1,5 @@
 using NotyWin.App.Geometry;
+using NotyWin.App.Models;
 
 namespace NotyWin.App.Deck;
 
@@ -10,10 +11,19 @@ namespace NotyWin.App.Deck;
 public sealed class DeckManager : IDisposable
 {
     private readonly Dictionary<uint, DeckController> _decks = new();
+    private readonly NoteList _notes;
+    private readonly ISettingsStore _settings;
     public IReadOnlyDictionary<uint, DeckController> Decks => _decks;
 
-    public string DisplayTargetRaw { get; set; } = "all";
-    public bool ShowOverFullScreen { get; set; } = true;
+    public DeckManager(NoteList notes, ISettingsStore settings)
+    {
+        _notes = notes;
+        _settings = settings;
+        _notes.Subscribe(new NoteCountObserver(this));
+    }
+
+    public string DisplayTargetRaw => _settings.Load().DisplayTarget;
+    public bool ShowOverFullScreen => _settings.Load().ShowOverFullScreen;
 
     public event Action? DisplaySetChanged;
 
@@ -41,10 +51,11 @@ public sealed class DeckManager : IDisposable
     public void RefreshAll()
     {
         var displays = DisplayEnumerator.Snapshot();
+        var s = _settings.Load();
         foreach (var d in _decks.Values)
         {
-            d.Model.SyncPreferences();
-            d.Window.ApplyLevel(ShowOverFullScreen);
+            d.Model.SyncPreferences(s);
+            d.Window.ApplyLevel(s.ShowOverFullScreen);
             if (displays.TryGetValue(d.DisplayId, out var disp))
                 d.Relayout(disp);
         }
@@ -52,22 +63,27 @@ public sealed class DeckManager : IDisposable
 
     private void Rebuild(IReadOnlyDictionary<uint, DisplayRect> displays, uint mainId)
     {
-        var target = DisplayTarget.Parse(DisplayTargetRaw);
+        var s = _settings.Load();
+        var target = DisplayTarget.Parse(s.DisplayTarget);
         var keep = DisplaySetResolver.Resolve(target, displays, mainId);
 
-        // Drop decks whose display is no longer targeted.
         foreach (var id in _decks.Keys.Where(id => !keep.Contains(id)).ToList())
         {
             _decks[id].Dispose();
             _decks.Remove(id);
         }
 
-        // Create decks for newly targeted displays.
         foreach (var id in keep)
         {
             if (!_decks.ContainsKey(id) && displays.TryGetValue(id, out var disp))
             {
-                var controller = new DeckController(id, disp, ShowOverFullScreen);
+                var controller = new DeckController(id, disp, s.ShowOverFullScreen)
+                {
+                    Notes = _notes,
+                    Settings = _settings,
+                };
+                controller.Model.SyncPreferences(s);
+                controller.Model.NoteCount = _notes.ActiveCount;
                 _decks[id] = controller;
             }
             else if (displays.TryGetValue(id, out var existing))
@@ -77,9 +93,33 @@ public sealed class DeckManager : IDisposable
         }
     }
 
+    /// <summary>Forces a full re-sync after settings change (e.g. scale).</summary>
+    public void OnSettingsChanged()
+    {
+        var s = _settings.Load();
+        foreach (var d in _decks.Values)
+            d.Model.SyncPreferences(s);
+    }
+
+    private void OnNoteListChanged()
+    {
+        var n = _notes.ActiveCount;
+        foreach (var d in _decks.Values)
+            if (d.Model.NoteCount != n) d.Model.NoteCount = n;
+    }
+
     public void Dispose()
     {
         foreach (var d in _decks.Values) d.Dispose();
         _decks.Clear();
+    }
+
+    private sealed class NoteCountObserver : IObserver<NoteList>
+    {
+        private readonly DeckManager _m;
+        public NoteCountObserver(DeckManager m) { _m = m; }
+        public void OnNext(NoteList value) => _m.OnNoteListChanged();
+        public void OnCompleted() { }
+        public void OnError(Exception error) { }
     }
 }

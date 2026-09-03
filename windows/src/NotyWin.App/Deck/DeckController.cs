@@ -1,4 +1,5 @@
 using NotyWin.App.Geometry;
+using NotyWin.App.Models;
 
 namespace NotyWin.App.Deck;
 
@@ -21,9 +22,23 @@ public sealed class DeckModel
     public double DeckYRatio { get; set; } = 0.5;
     public int NoteCount { get; set; } = 0;
 
-    public void SyncPreferences()
+    public void SyncPreferences(SettingsSnapshot s)
     {
-        DeckGeom.Scale = DeckScale;
+        Style = s.DeckStyle;
+        DeckAlwaysShown = s.DeckAlwaysShown;
+        PillHidden = s.DeckPillHidden;
+        DeckScale = s.DeckScale;
+        OnLeftEdge = s.DeckOnLeftEdge;
+        NoteFontSize = s.NoteFontSize;
+        Markdown = s.MarkdownStyling;
+        NoteWidth = s.FloatingNoteWidth;
+        NoteHeight = s.FloatingNoteHeight;
+        OpenOnHover = s.OpenOnHover;
+        TabPreview = s.TabPreview;
+        ShowOverFullScreen = s.ShowOverFullScreen;
+        EdgeWidth = s.EdgeWidth;
+        DeckYRatio = s.DeckYRatio;
+        DeckGeom.Scale = s.DeckScale;
     }
 }
 
@@ -37,6 +52,8 @@ public sealed class DeckController : IDisposable
     public DeckWindow Window { get; }
     public DeckModel Model { get; } = new();
     public DeckStateMachine StateMachine { get; } = new();
+    public NoteList? Notes { get; set; }
+    public ISettingsStore? Settings { get; set; }
 
     private System.Timers.Timer? _idleTimer;
     private System.Threading.Timer? _exitWork;
@@ -60,7 +77,7 @@ public sealed class DeckController : IDisposable
     public void Relayout(DisplayRect display)
     {
         _display = display;
-        Model.SyncPreferences();
+        DeckGeom.Scale = Model.DeckScale;
         StateMachine.RestingState = Model.DeckAlwaysShown ? DeckState.Fan : DeckState.Rest;
 
         var frame = DeckFrame.Layout(
@@ -127,7 +144,6 @@ public sealed class DeckController : IDisposable
     private void Apply(DeckDecision decision)
     {
         StateMachine.State = decision.Next;
-        Model.SyncPreferences();
 
         // Cancel any pending deferred work.
         if (Has(decision, DeckEffect.CancelExitWork))

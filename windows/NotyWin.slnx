@@ -2,8 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/NotyWin.App/NotyWin.App.csproj" />
     <Project Path="src/NotyWin.Geometry/NotyWin.Geometry.csproj" />
+    <Project Path="src/NotyWin.Models/NotyWin.Models.csproj" />
+    <Project Path="src/NotyWin.Storage/NotyWin.Storage.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NotyWin.Geometry.Tests/NotyWin.Geometry.Tests.csproj" />
+    <Project Path="tests/NotyWin.Models.Tests/NotyWin.Models.Tests.csproj" />
+    <Project Path="tests/NotyWin.Storage.Tests/NotyWin.Storage.Tests.csproj" />
   </Folder>
 </Solution>
