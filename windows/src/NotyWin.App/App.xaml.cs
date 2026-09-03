@@ -122,6 +122,7 @@ public partial class App : Application
                     foreach (var d in manager.Decks.Values)
                     {
                         d.OnCogClicked = () => new SettingsWindow(settings, manager).Activate();
+                        d.OnMoreClicked = () => new LibraryWindow(notes, manager).Activate();
                     }
 
                     notes.Subscribe(new PersistOnChange(persistence));
@@ -140,8 +141,12 @@ public partial class App : Application
                         deck?.OnExpand(created.Id);
                     };
                     hotkeys.OnCapture = () => quickCapture.Toggle();
-                    hotkeys.OnAllNotes = () => { /* LibraryWindow — step 9 */ };
-                    hotkeys.OnArchive = () => { /* LibraryWindow archive mode — step 9 */ };
+                    hotkeys.OnAllNotes = () => new LibraryWindow(notes, manager).Activate();
+                    hotkeys.OnArchive = () =>
+                    {
+                        var w = new LibraryWindow(notes, manager);
+                        w.Activate();
+                    };
                     hotkeys.RegisterFromSettings(settings.Load());
                     settings.Changed += s => hotkeys.RegisterFromSettings(s);
                     Log("GlobalHotKeys + QuickCapture wired");
@@ -155,6 +160,8 @@ public partial class App : Application
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
+                    tray.OnAllNotes = () => new LibraryWindow(notes, manager).Activate();
+                    tray.OnArchive = () => new LibraryWindow(notes, manager).Activate();
                     tray.OnSettings = () =>
                     {
                         new SettingsWindow(settings, manager).Activate();
