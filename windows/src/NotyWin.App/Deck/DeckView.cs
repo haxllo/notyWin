@@ -60,6 +60,20 @@ public sealed class DeckView : UserControl
         _canvas.Invalidate();
     }
 
+    /// <summary>Compute the current frame for hit-testing without going through the XAML draw path.</summary>
+    public RenderDeckFrame GetOrComputeFrame(double width, double height)
+    {
+        if (_frame is { } f && Math.Abs(f.Items.Count) >= 0) return f;
+        if (ViewModel is null) return new RenderDeckFrame
+        {
+            Items = Array.Empty<RenderItem>(),
+            PillVisible = false, FanVisible = false, ShowExpanded = false,
+        };
+        var cache = LabelCacheSingleton.Get();
+        _frame = ViewModel.Render(width, height, cache, Reveal);
+        return _frame;
+    }
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (ViewModel is null) return;

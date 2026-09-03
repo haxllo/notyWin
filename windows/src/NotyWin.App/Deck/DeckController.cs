@@ -96,8 +96,52 @@ public sealed class DeckController : IDisposable
         View.PointerExited += () => OnPointerExited();
         View.ItemPressed += (item, x, y) => OnItemPressed(item, x, y);
         View.TabRightClicked += item => OnTabRightClicked(item);
+
+        // Raw Win32 pointer events. WinUI's managed pointer events don't
+        // fire on a non-foreground borderless window, so we hook the
+        // underlying HWND directly and drive the state machine from the
+        // raw messages.
+        Window.PointerMoved += (x, y) => OnRawPointerMoved(x, y);
+        Window.PointerExited += () => OnPointerExited();
+        Window.RightButtonDown += (x, y) => OnRawRightDown(x, y);
+
+        // Size the panel first, then show. Showing before sizing leaves the
+        // window at its default 800x600 size and the resize doesn't take.
         Relayout(display);
         Window.Show();
+    }
+
+    private void OnRawPointerMoved(double x, double y)
+    {
+        // The pointer is over the window. Tell the state machine we entered
+        // (idempotent — same as DeckView.PointerEntered).
+        OnPointerEntered();
+
+        // Hit-test against the live paint frame to drive hover state.
+        if (View?.ViewModel is null) return;
+        var w = Window.AppWindow.Size.Width;
+        var h = Window.AppWindow.Size.Height;
+        if (View is null) return;
+        var frame = View.GetOrComputeFrame(w, h);
+        var hit = HitTest.Test(x, y, frame, w, !Model.OnLeftEdge);
+        if (View.Reveal.HoverTabId != hit?.Item.Note?.Id)
+        {
+            View.Reveal.HoverTabId = hit?.Item.Note?.Id;
+            View.Refresh();
+        }
+    }
+
+    private void OnRawRightDown(double x, double y)
+    {
+        // Mirror the WinUI RightTapped path: hit-test, find the tab, show
+        // context menu.
+        if (View?.ViewModel is null) return;
+        var w = Window.AppWindow.Size.Width;
+        var h = Window.AppWindow.Size.Height;
+        var frame = View.GetOrComputeFrame(w, h);
+        var hit = HitTest.Test(x, y, frame, w, !Model.OnLeftEdge);
+        if (hit is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } tabHit)
+            OnTabRightClicked(tabHit.Item);
     }
 
     public void Relayout(DisplayRect display)
@@ -113,9 +157,8 @@ public sealed class DeckController : IDisposable
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
         View?.Resize(frame.Width, frame.Height);
 
+        // Rest = pill IS visible. The window is the detection strip.
         if (StateMachine.State == DeckState.Rest)
-            Window.Hide();
-        else
             Window.Show();
     }
 
@@ -246,14 +289,14 @@ public sealed class DeckController : IDisposable
             _exitWork = null;
         }
 
-        if (Has(decision, DeckEffect.Hide))
-        {
-            Window.Hide();
-            StopIdleWatch();
-        }
-        else if (Has(decision, DeckEffect.ShowPill) ||
-                 Has(decision, DeckEffect.ShowFan) ||
-                 Has(decision, DeckEffect.ShowExpanded))
+        // The "Hide" effect from the state machine is ignored on Windows.
+        // macOS hides the panel because the user can re-trigger it from the
+        // global menu bar; Windows has no equivalent surface, so the panel
+        // must always be visible.
+
+        if (Has(decision, DeckEffect.ShowPill) ||
+            Has(decision, DeckEffect.ShowFan) ||
+            Has(decision, DeckEffect.ShowExpanded))
         {
             Relayout(_display);
         }

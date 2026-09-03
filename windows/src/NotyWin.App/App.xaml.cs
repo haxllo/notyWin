@@ -100,6 +100,9 @@ public partial class App : Application
                     Window = new MainWindow();
                     Log("MainWindow constructed");
                     Window.Activate();
+                    // Send the MainWindow to the back so it doesn't sit on top
+                    // of the deck. We still want it visible as a status panel.
+                    Window.AppWindow.MoveInZOrderAtBottom();
                     Log("MainWindow activated");
                     Window.SetStatus(BuildDisplaysText(manager), notes.ActiveCount);
 
