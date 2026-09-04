@@ -107,17 +107,19 @@ public sealed class DeckWindow
     }
 
     /// <summary>
-    /// Frame arrives in DIPs. AppWindow's RectInt32 API sizes the outer HWND
-    /// in physical pixels. With WS_POPUP there is no non-client chrome.
+    /// Frame arrives in DIPs. Uses SetWindowPos (synchronous) instead of
+    /// AppWindow.MoveAndResize (async) to avoid corrupting the XAML
+    /// composition target when the canvas is invalidated mid-resize.
     /// </summary>
     public void SetFrame(double x, double y, double w, double h)
     {
         var scale = DpiScale;
-        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-            (int)Math.Round(x * scale),
-            (int)Math.Round(y * scale),
-            Math.Max(1, (int)Math.Round(w * scale)),
-            Math.Max(1, (int)Math.Round(h * scale))));
+        var px = (int)Math.Round(x * scale);
+        var py = (int)Math.Round(y * scale);
+        var pw = Math.Max(1, (int)Math.Round(w * scale));
+        var ph = Math.Max(1, (int)Math.Round(h * scale));
+        SetWindowPos(Hwnd, HWND_TOPMOST, px, py, pw, ph,
+            SWP_NOACTIVATE | SWP_NOZORDER);
     }
 
     public void Show() => ShowWindow(Hwnd, SW_SHOWNOACTIVATE);
@@ -241,7 +243,13 @@ public sealed class DeckWindow
     [DllImport("user32.dll")]
     private static extern IntPtr LoadCursor(IntPtr hInstance, IntPtr lpCursorName);
 
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
     private static readonly IntPtr IDC_ARROW = new(32512);
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOZORDER = 0x0004;
 
     [DllImport("comctl32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
