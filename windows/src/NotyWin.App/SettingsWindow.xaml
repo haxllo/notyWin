@@ -4,22 +4,12 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Noty Settings">
-    <Grid x:Name="RootGrid" Padding="14" Background="White">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0" Background="#F3F3F3" Padding="6" CornerRadius="4">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button x:Name="ShortcutsBtn" Content="Shortcuts" Click="OnNavClicked" Tag="shortcuts" />
-                <Button x:Name="DeckBtn" Content="Deck" Click="OnNavClicked" Tag="deck" />
-                <Button x:Name="NotesBtn" Content="Notes" Click="OnNavClicked" Tag="notes" />
-            </StackPanel>
-        </Border>
-
-        <ScrollViewer Grid.Row="1" Margin="0,12,0,0">
-            <StackPanel x:Name="Content" Spacing="14" />
-        </ScrollViewer>
-    </Grid>
+    <StackPanel x:Name="RootPanel" Padding="20" Spacing="10"
+                Background="White">
+        <TextBlock Text="Noty Settings" FontSize="24" FontWeight="Bold"
+                   Foreground="Black" />
+        <TextBlock x:Name="StatusText" Text="Loading..." FontSize="14"
+                   Foreground="Gray" />
+        <StackPanel x:Name="Content" Spacing="10" />
+    </StackPanel>
 </Window>

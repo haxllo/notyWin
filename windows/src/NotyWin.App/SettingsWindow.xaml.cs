@@ -9,9 +9,7 @@ using Color = Windows.UI.Color;
 namespace NotyWin.App;
 
 /// <summary>
-/// The Settings window — three sections (Shortcuts, Deck, Notes).
-/// Mirrors Sources/SettingsWindow.swift. Reads/writes the shared
-/// <see cref="ISettingsStore"/>; every change is applied immediately.
+/// The Settings window — builds content programmatically.
 /// </summary>
 public sealed partial class SettingsWindow : Window
 {
@@ -21,59 +19,28 @@ public sealed partial class SettingsWindow : Window
 
     public SettingsWindow(ISettingsStore settings, DeckManager manager)
     {
-        InitializeComponent();
-        _settings = settings;
-        _manager = manager;
-        _snapshot = settings.Load();
-        BuildShortcutsTab();
-        ShortcutsBtn.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
-    }
-
-    private void OnNavClicked(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button btn || btn.Tag is not string tag) return;
-        Content.Children.Clear();
-        // Reset all button backgrounds
-        ShortcutsBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        DeckBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        NotesBtn.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        btn.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
-        switch (tag)
+        try
         {
-            case "shortcuts": BuildShortcutsTab(); break;
-            case "deck": BuildDeckTab(); break;
-            case "notes": BuildNotesTab(); break;
+            InitializeComponent();
+            _settings = settings;
+            _manager = manager;
+            _snapshot = settings.Load();
+            BuildContent();
+            StatusText.Text = "Ready";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error: {ex.Message}";
         }
     }
 
-    private void BuildShortcutsTab()
+    private void BuildContent()
     {
-        var stack = new StackPanel { Spacing = 8 };
-        stack.Children.Add(MakeHeader("Global"));
-        stack.Children.Add(MakeShortcutRow("New note", _snapshot.ScNewNote, s => UpdateSetting(x => x with { ScNewNote = s })));
-        stack.Children.Add(MakeShortcutRow("All notes", _snapshot.ScAllNotes, s => UpdateSetting(x => x with { ScAllNotes = s })));
-        stack.Children.Add(MakeShortcutRow("Archive window", _snapshot.ScArchive, s => UpdateSetting(x => x with { ScArchive = s })));
-        stack.Children.Add(MakeShortcutRow("Quick capture", _snapshot.ScCapture, s => UpdateSetting(x => x with { ScCapture = s })));
+        Content.Children.Clear();
 
-        stack.Children.Add(MakeHeader("In-note"));
-        stack.Children.Add(MakeShortcutRow("Close", _snapshot.ScClose, s => UpdateSetting(x => x with { ScClose = s })));
-        stack.Children.Add(MakeShortcutRow("Archive note", _snapshot.ScArchiveNote, s => UpdateSetting(x => x with { ScArchiveNote = s })));
-        stack.Children.Add(MakeShortcutRow("Delete", _snapshot.ScDelete, s => UpdateSetting(x => x with { ScDelete = s })));
-        stack.Children.Add(MakeShortcutRow("Find", _snapshot.ScFind, s => UpdateSetting(x => x with { ScFind = s })));
-        stack.Children.Add(MakeShortcutRow("Toggle task", _snapshot.ScTask, s => UpdateSetting(x => x with { ScTask = s })));
-        stack.Children.Add(MakeShortcutRow("Pin", _snapshot.ScPin, s => UpdateSetting(x => x with { ScPin = s })));
-        stack.Children.Add(MakeShortcutRow("Cycle color", _snapshot.ScColour, s => UpdateSetting(x => x with { ScColour = s })));
-        stack.Children.Add(MakeShortcutRow("Bigger text", _snapshot.ScBigger, s => UpdateSetting(x => x with { ScBigger = s })));
-        stack.Children.Add(MakeShortcutRow("Smaller text", _snapshot.ScSmaller, s => UpdateSetting(x => x with { ScSmaller = s })));
-        Content.Children.Add(stack);
-    }
-
-    private void BuildDeckTab()
-    {
-        var stack = new StackPanel { Spacing = 10 };
+        Content.Children.Add(MakeHeader("Deck Settings"));
 
         // Style
-        var styleLabel = MakeLabel("Style");
         var stylePicker = new ComboBox { Width = 200 };
         stylePicker.Items.Add("Tabs");
         stylePicker.Items.Add("Compact");
@@ -82,22 +49,21 @@ public sealed partial class SettingsWindow : Window
         {
             DeckStyle = stylePicker.SelectedIndex == 1 ? DeckStyle.Compact : DeckStyle.Tabs
         });
-        stack.Children.Add(MakeRow(styleLabel, stylePicker));
+        Content.Children.Add(MakeRow("Style", stylePicker));
 
-        // Size slider
-        var sizeLabel = MakeLabel("Size");
+        // Size
         var sizeSlider = new Slider { Minimum = 0.7, Maximum = 1.8, StepFrequency = 0.05,
             Width = 200, Value = _snapshot.DeckScale };
-        var sizeValue = new TextBlock { Text = $"{(_snapshot.DeckScale * 100):F0}%", Width = 40 };
+        var sizeValue = new TextBlock { Text = $"{(_snapshot.DeckScale * 100):F0}%", Width = 40,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)) };
         sizeSlider.ValueChanged += (_, _) =>
         {
             sizeValue.Text = $"{(sizeSlider.Value * 100):F0}%";
             UpdateSetting(x => x with { DeckScale = sizeSlider.Value });
         };
-        stack.Children.Add(MakeRow(sizeLabel, MakeH(sizeSlider, sizeValue)));
+        Content.Children.Add(MakeRow("Size", MakeH(sizeSlider, sizeValue)));
 
         // Edge
-        var edgeLabel = MakeLabel("Edge");
         var edgePicker = new ComboBox { Width = 200 };
         edgePicker.Items.Add("Left");
         edgePicker.Items.Add("Right");
@@ -106,142 +72,61 @@ public sealed partial class SettingsWindow : Window
         {
             DeckOnLeftEdge = edgePicker.SelectedIndex == 0
         });
-        stack.Children.Add(MakeRow(edgeLabel, edgePicker));
-
-        // Detection area
-        var detectLabel = MakeLabel("Detection area");
-        var detectPicker = new ComboBox { Width = 200 };
-        detectPicker.Items.Add("Narrow (8pt)");
-        detectPicker.Items.Add("Standard (14pt)");
-        detectPicker.Items.Add("Wide (28pt)");
-        detectPicker.Items.Add("Very Wide (44pt)");
-        detectPicker.SelectedIndex = _snapshot.EdgeWidth switch
-        {
-            8 => 0, 28 => 2, 44 => 3, _ => 1
-        };
-        detectPicker.SelectionChanged += (_, _) => UpdateSetting(x => x with
-        {
-            EdgeWidth = detectPicker.SelectedIndex switch { 0 => 8.0, 2 => 28.0, 3 => 44.0, _ => 14.0 }
-        });
-        stack.Children.Add(MakeRow(detectLabel, detectPicker));
+        Content.Children.Add(MakeRow("Edge", edgePicker));
 
         // Keep deck open
-        var keepSwitch = new ToggleSwitch { IsOn = _snapshot.DeckAlwaysShown, OnContent = "On", OffContent = "Off" };
+        var keepSwitch = new ToggleSwitch { IsOn = _snapshot.DeckAlwaysShown };
         keepSwitch.Toggled += (_, _) => UpdateSetting(x => x with { DeckAlwaysShown = keepSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Keep deck open"), keepSwitch));
-
-        // Hide pill
-        var hideSwitch = new ToggleSwitch { IsOn = _snapshot.DeckPillHidden, OnContent = "On", OffContent = "Off" };
-        hideSwitch.Toggled += (_, _) => UpdateSetting(x => x with { DeckPillHidden = hideSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Hide pill"), hideSwitch));
+        Content.Children.Add(MakeRow("Keep deck open", keepSwitch));
 
         // Hover preview
-        var hoverSwitch = new ToggleSwitch { IsOn = _snapshot.TabPreview, OnContent = "On", OffContent = "Off" };
+        var hoverSwitch = new ToggleSwitch { IsOn = _snapshot.TabPreview };
         hoverSwitch.Toggled += (_, _) => UpdateSetting(x => x with { TabPreview = hoverSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Hover preview"), hoverSwitch));
+        Content.Children.Add(MakeRow("Hover preview", hoverSwitch));
 
-        // Open on hover
-        var openHoverSwitch = new ToggleSwitch { IsOn = _snapshot.OpenOnHover, OnContent = "On", OffContent = "Off" };
-        openHoverSwitch.Toggled += (_, _) => UpdateSetting(x => x with { OpenOnHover = openHoverSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Open on hover"), openHoverSwitch));
-
-        // Show over full-screen
-        var fullscreenSwitch = new ToggleSwitch { IsOn = _snapshot.ShowOverFullScreen, OnContent = "On", OffContent = "Off" };
-        fullscreenSwitch.Toggled += (_, _) => UpdateSetting(x => x with { ShowOverFullScreen = fullscreenSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Show over full-screen"), fullscreenSwitch));
-
-        // Launch at login
-        var launchSwitch = new ToggleSwitch { IsOn = LaunchAtLogin.IsEnabled(), OnContent = "On", OffContent = "Off" };
-        launchSwitch.Toggled += (_, _) =>
-        {
-            try
-            {
-                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
-                LaunchAtLogin.SetEnabled(launchSwitch.IsOn, exePath);
-                UpdateSetting(x => x with { LaunchAtLogin = launchSwitch.IsOn });
-            }
-            catch { }
-        };
-        stack.Children.Add(MakeRow(MakeLabel("Launch at login"), launchSwitch));
-
-        Content.Children.Add(stack);
-    }
-
-    private void BuildNotesTab()
-    {
-        var stack = new StackPanel { Spacing = 10 };
-
-        // Font
-        var fontLabel = MakeLabel("Font");
-        var fontPicker = new ComboBox { Width = 200 };
-        var fonts = new[] { "System", "Noteworthy-Light", "Segoe UI", "Georgia", "Consolas" };
-        foreach (var f in fonts) fontPicker.Items.Add(f);
-        fontPicker.SelectedIndex = Math.Max(0, Array.IndexOf(fonts, _snapshot.NoteFontName));
-        fontPicker.SelectionChanged += (_, _) => UpdateSetting(x => x with
-        {
-            NoteFontName = fontPicker.SelectedItem as string ?? "Segoe UI"
-        });
-        stack.Children.Add(MakeRow(fontLabel, fontPicker));
+        Content.Children.Add(MakeHeader("Notes Settings"));
 
         // Text size
-        var sizeLabel = MakeLabel("Text size");
-        var sizeSlider = new Slider { Minimum = 10, Maximum = 30, StepFrequency = 0.5,
+        var textSlider = new Slider { Minimum = 10, Maximum = 30, StepFrequency = 0.5,
             Width = 200, Value = _snapshot.NoteFontSize };
-        var sizeValue = new TextBlock { Text = $"{_snapshot.NoteFontSize:F1}", Width = 40 };
-        sizeSlider.ValueChanged += (_, _) =>
+        var textValue = new TextBlock { Text = $"{_snapshot.NoteFontSize:F1}", Width = 40,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)) };
+        textSlider.ValueChanged += (_, _) =>
         {
-            sizeValue.Text = $"{sizeSlider.Value:F1}";
-            UpdateSetting(x => x with { NoteFontSize = sizeSlider.Value });
+            textValue.Text = $"{textSlider.Value:F1}";
+            UpdateSetting(x => x with { NoteFontSize = textSlider.Value });
         };
-        stack.Children.Add(MakeRow(sizeLabel, MakeH(sizeSlider, sizeValue)));
-
-        // Note size preset
-        var noteLabel = MakeLabel("Note size");
-        var notePicker = new ComboBox { Width = 200 };
-        notePicker.Items.Add("Small (400×320)");
-        notePicker.Items.Add("Medium (460×380)");
-        notePicker.Items.Add("Large (560×470)");
-        notePicker.Items.Add("Huge (680×560)");
-        notePicker.SelectedIndex = Math.Clamp(_snapshot.NoteSizeIndex, 0, 3);
-        notePicker.SelectionChanged += (_, _) => UpdateSetting(x => x with
-        {
-            NoteSizeIndex = notePicker.SelectedIndex
-        });
-        stack.Children.Add(MakeRow(noteLabel, notePicker));
+        Content.Children.Add(MakeRow("Text size", MakeH(textSlider, textValue)));
 
         // Markdown
-        var mdSwitch = new ToggleSwitch { IsOn = _snapshot.MarkdownStyling, OnContent = "On", OffContent = "Off" };
+        var mdSwitch = new ToggleSwitch { IsOn = _snapshot.MarkdownStyling };
         mdSwitch.Toggled += (_, _) => UpdateSetting(x => x with { MarkdownStyling = mdSwitch.IsOn });
-        stack.Children.Add(MakeRow(MakeLabel("Markdown styling"), mdSwitch));
-
-        Content.Children.Add(stack);
+        Content.Children.Add(MakeRow("Markdown styling", mdSwitch));
     }
-
-    // MARK: - Helpers
 
     private TextBlock MakeHeader(string text) => new()
     {
         Text = text,
-        FontSize = 14,
+        FontSize = 16,
         FontWeight = new Windows.UI.Text.FontWeight { Weight = 700 },
-        Margin = new Thickness(0, 8, 0, 4),
+        Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)),
+        Margin = new Thickness(0, 12, 0, 4),
     };
 
-    private TextBlock MakeLabel(string text) => new()
+    private Grid MakeRow(string label, FrameworkElement content)
     {
-        Text = text,
-        Width = 140,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    private Grid MakeRow(FrameworkElement label, FrameworkElement content)
-    {
-        var g = new Grid { ColumnSpacing = 10 };
+        var g = new Grid { ColumnSpacing = 10, Margin = new Thickness(0, 4, 0, 4) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(label, 0);
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)),
+        };
+        Grid.SetColumn(labelBlock, 0);
         Grid.SetColumn(content, 1);
-        g.Children.Add(label);
+        g.Children.Add(labelBlock);
         g.Children.Add(content);
         return g;
     }
@@ -252,78 +137,6 @@ public sealed partial class SettingsWindow : Window
         foreach (var i in items) s.Children.Add(i);
         return s;
     }
-
-    private Grid MakeShortcutRow(string label, Shortcut shortcut, Action<Shortcut> onChange)
-    {
-        var box = new TextBox
-        {
-            Text = FormatShortcut(shortcut),
-            Width = 160,
-            IsReadOnly = true,
-        };
-        var recBtn = new Button { Content = "Record", Width = 80 };
-        bool recording = false;
-        recBtn.Click += (_, _) =>
-        {
-            recording = !recording;
-            recBtn.Content = recording ? "Stop" : "Record";
-            box.Text = recording ? "Press shortcut..." : FormatShortcut(shortcut);
-        };
-        box.KeyDown += (s, e) =>
-        {
-            if (!recording) return;
-            // Build shortcut from captured key + modifiers.
-            var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            var alt = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            var win = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.LeftWindows)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) ||
-                Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.RightWindows)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-            var mods = KeyModifiers.None;
-            if (shift) mods |= KeyModifiers.Shift;
-            if (ctrl) mods |= KeyModifiers.Control;
-            if (alt) mods |= KeyModifiers.Alt;
-            if (win) mods |= KeyModifiers.Meta;
-
-            var vk = (int)e.Key;
-            if (vk == 0) return; // modifier-only
-            var newSc = new Shortcut { Modifiers = mods, KeyCode = vk };
-            recording = false;
-            recBtn.Content = "Record";
-            box.Text = FormatShortcut(newSc);
-            onChange(newSc);
-            e.Handled = true;
-        };
-        return MakeRow(MakeLabel(label), MakeH(box, recBtn));
-    }
-
-    private static string FormatShortcut(Shortcut s)
-    {
-        var parts = new List<string>();
-        if (s.Modifiers.HasFlag(KeyModifiers.Control)) parts.Add("Ctrl");
-        if (s.Modifiers.HasFlag(KeyModifiers.Alt)) parts.Add("Alt");
-        if (s.Modifiers.HasFlag(KeyModifiers.Shift)) parts.Add("Shift");
-        if (s.Modifiers.HasFlag(KeyModifiers.Meta)) parts.Add("Win");
-        parts.Add(KeyName(s.KeyCode));
-        return string.Join("+", parts);
-    }
-
-    private static string KeyName(int vk) => vk switch
-    {
-        0x08 => "Backspace", 0x09 => "Tab", 0x0D => "Enter", 0x1B => "Esc",
-        0x20 => "Space", 0x2E => "Del", 0x26 => "Up", 0x28 => "Down",
-        0x25 => "Left", 0x27 => "Right",
-        >= 0x30 and <= 0x39 => ((char)vk).ToString(),
-        >= 0x41 and <= 0x5A => ((char)vk).ToString(),
-        >= 0x70 and <= 0x7B => $"F{vk - 0x6F}",
-        0xBB => "+", 0xBD => "-", 0xBE => ".",
-        _ => $"VK{vk:X}"
-    };
 
     private void UpdateSetting(Func<SettingsSnapshot, SettingsSnapshot> mutate)
     {

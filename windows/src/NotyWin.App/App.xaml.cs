@@ -161,13 +161,11 @@ public partial class App : Application
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
-                    hotkeys.OnCapture = () => quickCapture.Toggle();
-                    hotkeys.OnAllNotes = () => new LibraryWindow(notes, manager).Activate();
-                    hotkeys.OnArchive = () =>
-                    {
-                        var w = new LibraryWindow(notes, manager);
-                        w.Activate();
-                    };
+                    hotkeys.OnCapture = () => DispatcherQueue.TryEnqueue(() => quickCapture.Toggle());
+                    hotkeys.OnAllNotes = () => DispatcherQueue.TryEnqueue(() =>
+                        new LibraryWindow(notes, manager).Activate());
+                    hotkeys.OnArchive = () => DispatcherQueue.TryEnqueue(() =>
+                        new LibraryWindow(notes, manager).Activate());
                     hotkeys.RegisterFromSettings(settings.Load());
                     settings.Changed += s => hotkeys.RegisterFromSettings(s);
                     Log("GlobalHotKeys + QuickCapture wired");
@@ -181,12 +179,12 @@ public partial class App : Application
                         var deck = manager.FocusAt(cx, cy, displays);
                         deck?.OnExpand(created.Id);
                     };
-                    tray.OnAllNotes = () => new LibraryWindow(notes, manager).Activate();
-                    tray.OnArchive = () => new LibraryWindow(notes, manager).Activate();
-                    tray.OnSettings = () =>
-                    {
-                        new SettingsWindow(settings, manager).Activate();
-                    };
+                    tray.OnAllNotes = () => DispatcherQueue.TryEnqueue(() =>
+                        new LibraryWindow(notes, manager).Activate());
+                    tray.OnArchive = () => DispatcherQueue.TryEnqueue(() =>
+                        new LibraryWindow(notes, manager).Activate());
+                    tray.OnSettings = () => DispatcherQueue.TryEnqueue(() =>
+                        new SettingsWindow(settings, manager).Activate());
                     tray.OnQuit = () =>
                     {
                         manager.Dispose();

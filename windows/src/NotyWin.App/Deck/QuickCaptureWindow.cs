@@ -149,19 +149,21 @@ public sealed class QuickCaptureWindow : IDisposable
     private void PositionOnCursorScreen()
     {
         if (_appWindow is null) return;
-        // Center horizontally on the screen containing the cursor, 58% up from bottom.
         var displays = DisplayEnumerator.Snapshot();
         var (cx, cy) = DeckWindow.CursorPos();
         var display = DisplayEnumerator.DisplayAtPoint(cx, cy, displays);
         if (display is not { } d) return;
         var dpi = (double)GetDpiForWindow(_hwnd) / 96.0;
+        // Convert display rect from physical pixels to DIPs.
+        var visL = d.VisLeft / dpi;
+        var visR = d.VisRight / dpi;
+        var visB = d.VisBottom / dpi;
+        var visH = d.VisHeight / dpi;
         var w = 460;
         var h = 150;
-        var x = (int)(((d.VisLeft + d.VisRight) / 2.0) - w / 2.0);
-        var y = (int)(d.VisBottom - h - (d.VisHeight * 0.12));
-        // y is in physical pixels from the rect
-        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-            (int)Math.Round(x / dpi), (int)Math.Round(y / dpi), w, h));
+        var x = (int)((visL + visR) / 2.0 - w / 2.0);
+        var y = (int)(visB - h - visH * 0.12);
+        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));
     }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
