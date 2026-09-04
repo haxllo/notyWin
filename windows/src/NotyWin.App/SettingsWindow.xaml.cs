@@ -26,11 +26,24 @@ public sealed partial class SettingsWindow : Window
             _manager = manager;
             _snapshot = settings.Load();
             BuildContent();
-            StatusText.Text = "Ready";
+            if (StatusText != null) StatusText.Text = "Ready";
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"SettingsWindow error: {ex}");
+            try
+            {
+                var dir = System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+                    "Noty");
+                System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(dir, "crash.log"),
+                    $"[{DateTime.UtcNow:O}] SettingsWindow: {ex}\n");
+            }
+            catch { }
+            // Re-throw so the caller knows the window failed
+            throw;
         }
     }
 

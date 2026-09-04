@@ -27,11 +27,23 @@ public partial class App : Application
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         System.Diagnostics.Debug.WriteLine($"NotyWin UnhandledException: {e.Exception}");
-        System.IO.File.AppendAllText(
-            System.IO.Path.Combine(
+        try
+        {
+            var dir = System.IO.Path.Combine(
                 System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-                "Noty", "crash.log"),
-            $"[{DateTime.UtcNow:O}] UI unhandled: {e.Exception}\n");
+                "Noty");
+            System.IO.Directory.CreateDirectory(dir);
+            var ex = e.Exception;
+            var full = $"[{DateTime.UtcNow:O}] UI unhandled: {ex}\n";
+            while (ex.InnerException != null)
+            {
+                ex = ex.InnerException;
+                full += $"  INNER: {ex}\n";
+            }
+            full += $"\nMESSAGE: {e.Message}\n";
+            System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "crash.log"), full);
+        }
+        catch { }
         e.Handled = true;
     }
 
