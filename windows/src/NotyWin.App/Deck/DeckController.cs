@@ -297,19 +297,26 @@ public sealed class DeckController : IDisposable
         DeckGeom.Scale = Model.DeckScale;
         StateMachine.RestingState = Model.DeckAlwaysShown ? DeckState.Fan : DeckState.Rest;
 
-        // Convert physical-pixel display rect to DIPs so the frame and the
-        // panel agree on units.
         var dpi = Window.DpiScale;
         var displayDips = display.ToDips(dpi);
         var frame = DeckFrame.Layout(
             StateMachine.State, displayDips, Model.OnLeftEdge,
             Math.Max(1, Model.NoteCount), Model.NoteWidth,
             Model.EdgeWidth, Model.DeckYRatio);
-        DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} frame=({frame.X:F0},{frame.Y:F0}) {frame.Width:F0}x{frame.Height:F0} noteCount={Model.NoteCount} dpi={dpi:F2}");
+        DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} frame=({frame.X:F0},{frame.Y:F0}) {frame.Width:F0}x{frame.Height:F0} noteCount={Model.NoteCount}");
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
-        View?.Resize(frame.Width, frame.Height);
+        // Defer the canvas resize to the next dispatcher frame so the WinUI
+        // composition has time to process the MoveAndResize before we
+        // invalidate the canvas. Painting during an active resize causes
+        // COMException 0x80070490 from the native XAML composition target.
+        var w = frame.Width;
+        var h = frame.Height;
+        _dispatcher.TryEnqueue(() =>
+        {
+            if (_disposed || View is null) return;
+            View.Resize(w, h);
+        });
 
-        // Rest = pill IS visible. The window is the detection strip.
         if (StateMachine.State == DeckState.Rest)
             Window.Show();
     }
