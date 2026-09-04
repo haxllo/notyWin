@@ -105,18 +105,20 @@ public sealed class DeckController : IDisposable
         Window.RightButtonDown += (x, y) => OnRightButtonDown(x, y);
     }
 
-    /// <summary>Called by DeckManager after construction to set Notes/Settings
-    /// and the initial NoteCount so the first Relayout sees the right value.</summary>
-    public void Initialize(NoteList notes, ISettingsStore settings, int noteCount)
+    /// <summary>Called by DeckManager after construction. Preferences and the
+    /// note count must be synchronized before the first layout.</summary>
+    public void Initialize(NoteList notes, ISettingsStore settings)
     {
         Notes = notes;
         Settings = settings;
-        Model.NoteCount = noteCount;
+        var snapshot = settings.Load();
+        Model.SyncPreferences(snapshot);
+        Model.NoteCount = notes.ActiveCount;
         View.ViewModel = new DeckViewModel(notes, () => settings.Load());
-        View.OnRightEdge = !settings.Load().DeckOnLeftEdge;
+        View.OnRightEdge = !snapshot.DeckOnLeftEdge;
         View.Editor.Notes = notes;
         View.Editor.OnRequestCollapse = () => OnCollapse();
-        // Resize the panel now that Notes/Settings/NoteCount are known.
+        // The first frame now sees the persisted scale, edge and note count.
         Relayout(_display);
         Window.Show();
         StartPoll();
@@ -165,26 +167,47 @@ public sealed class DeckController : IDisposable
 
     private void OnPointerMoved(double x, double y)
     {
-        var hit = View?.HitAt(x, y);
-        var id = hit?.Item.Note?.Id;
-        if (View is not null && View.Reveal.HoverTabId != id)
+        try
         {
-            View.Reveal.HoverTabId = id;
-            View.Refresh();
-            ScheduleHoverAction(id);
+            var hit = View?.HitAt(x, y);
+            var id = hit?.Item.Note?.Id;
+            if (View is not null && View.Reveal.HoverTabId != id)
+            {
+                View.Reveal.HoverTabId = id;
+                View.Refresh();
+                ScheduleHoverAction(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"OnPointerMoved EX: {ex.Message}");
         }
     }
 
     private void OnLeftButtonDown(double x, double y)
     {
-        if (View?.HitAt(x, y) is { } hit)
-            OnItemPressed(hit.Item, x, y);
+        try
+        {
+            if (View?.HitAt(x, y) is { } hit)
+                OnItemPressed(hit.Item, x, y);
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"OnLeftButtonDown EX: {ex.Message}");
+        }
     }
 
     private void OnRightButtonDown(double x, double y)
     {
-        if (View?.HitAt(x, y) is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } hit)
-            OnTabRightClicked(hit.Item);
+        try
+        {
+            if (View?.HitAt(x, y) is { Item: { Kind: RenderItemKind.Tab or RenderItemKind.ChipTab } } hit)
+                OnTabRightClicked(hit.Item);
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"OnRightButtonDown EX: {ex.Message}");
+        }
     }
 
     // MARK: - Enter/exit poll
@@ -343,26 +366,33 @@ public sealed class DeckController : IDisposable
     public void OnTabRightClicked(RenderItem item)
     {
         if (item.Note is not { } n) return;
-        var flyout = new MenuFlyout();
-        var pin = new MenuFlyoutItem { Text = n.Pinned ? "Unpin" : "Pin" };
-        pin.Click += (_, _) => Notes?.TogglePin(n.Id);
-        var archive = new MenuFlyoutItem { Text = "Archive" };
-        archive.Click += (_, _) => { if (Notes is not null) { Notes.SetArchived(n.Id, true); OnCollapse(); } };
-        var cycle = new MenuFlyoutItem { Text = "Cycle color" };
-        cycle.Click += (_, _) => Notes?.CycleColor(n.Id);
-        var del = new MenuFlyoutItem { Text = "Delete" };
-        del.Click += (_, _) =>
+        try
         {
-            if (Notes is null) return;
-            Notes.Delete(n.Id, TimeSpan.FromSeconds(10));
-            if (ExpandedNoteId == n.Id) OnCollapse();
-        };
-        flyout.Items.Add(pin);
-        flyout.Items.Add(archive);
-        flyout.Items.Add(cycle);
-        flyout.Items.Add(new MenuFlyoutSeparator());
-        flyout.Items.Add(del);
-        flyout.ShowAt(View!, new FlyoutShowOptions { Position = new Windows.Foundation.Point(0, 0) });
+            var flyout = new MenuFlyout();
+            var pin = new MenuFlyoutItem { Text = n.Pinned ? "Unpin" : "Pin" };
+            pin.Click += (_, _) => Notes?.TogglePin(n.Id);
+            var archive = new MenuFlyoutItem { Text = "Archive" };
+            archive.Click += (_, _) => { if (Notes is not null) { Notes.SetArchived(n.Id, true); OnCollapse(); } };
+            var cycle = new MenuFlyoutItem { Text = "Cycle color" };
+            cycle.Click += (_, _) => Notes?.CycleColor(n.Id);
+            var del = new MenuFlyoutItem { Text = "Delete" };
+            del.Click += (_, _) =>
+            {
+                if (Notes is null) return;
+                Notes.Delete(n.Id, TimeSpan.FromSeconds(10));
+                if (ExpandedNoteId == n.Id) OnCollapse();
+            };
+            flyout.Items.Add(pin);
+            flyout.Items.Add(archive);
+            flyout.Items.Add(cycle);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(del);
+            flyout.ShowAt(View!, new FlyoutShowOptions { Position = new Windows.Foundation.Point(0, 0) });
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"OnTabRightClicked EX: {ex.Message}");
+        }
     }
 
     /// <summary>Translate a paint-time hit into a state-machine command.</summary>

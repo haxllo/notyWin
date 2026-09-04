@@ -72,15 +72,13 @@ public sealed class DeckView : UserControl
         _canvas.Invalidate();
     }
 
-    /// <summary>Re-render after a panel size change (DIPs). Sets the UserControl's
-    /// explicit Width/Height so the WinUI layout pass can't override our size
-    /// with the residual XAML default (800×600).</summary>
+    /// <summary>Re-render after a panel size change (DIPs). The host sizes the
+    /// window's client surface; this control must stay stretch-aligned so the
+    /// XAML layout pass has one authoritative size.</summary>
     public void Resize(double panelWidth, double panelHeight)
     {
         _panelW = panelWidth;
         _panelH = panelHeight;
-        Width = panelWidth;
-        Height = panelHeight;
         _frame = null;
         _canvas.Invalidate();
     }
@@ -157,23 +155,28 @@ public sealed class DeckView : UserControl
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (ViewModel is null) return;
-        // Always use the tracked panel size from Resize(), not ActualWidth —
-        // the WinUI layout pass can report a stale value before our explicit
-        // Width/Height has propagated.
         var w = _panelW;
         var h = _panelH;
         if (w <= 0 || h <= 0)
         {
-            // First paint before any Resize() — fall back to sender's size.
             w = sender.ActualWidth;
             h = sender.ActualHeight;
             if (w <= 0 || h <= 0) return;
         }
         var now = Environment.TickCount / 1000.0;
-        var frame = ViewModel.Render(h, w, LabelCacheSingleton.Get(), Reveal, now);
-        _frame = frame;
-        DeckLog.Write("VIEW", $"OnDraw w={w:F0} h={h:F0} items={frame.Items.Count} fan={frame.FanVisible} pill={frame.PillVisible}");
-        _painter.Paint(args.DrawingSession, frame, w);
+        try
+        {
+            var frame = ViewModel.Render(h, w, LabelCacheSingleton.Get(), Reveal, now);
+            _frame = frame;
+            _painter.Paint(args.DrawingSession, frame, w);
+        }
+        catch (Exception ex)
+        {
+            // Win2D geometry creation can throw COMException if the device is
+            // lost or a resource is disposed mid-frame. Log and skip — the
+            // next paint pass will retry with a fresh frame.
+            DeckLog.Write("VIEW", $"OnDraw EX w={w:F0} h={h:F0}: {ex.Message}");
+        }
     }
 }
 
