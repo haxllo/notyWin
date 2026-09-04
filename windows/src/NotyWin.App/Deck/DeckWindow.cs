@@ -55,18 +55,29 @@ public sealed class DeckWindow
         presenter.IsMaximizable = false;
         presenter.IsMinimizable = false;
         presenter.IsModal = false;
+        AppWindow.IsShownInSwitchers = false;
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(Window);
 
-        // WS_EX_TOOLWINDOW keeps the deck out of Alt-Tab; WS_EX_NOACTIVATE is
-        // the nonactivatingPanel half — clicking the deck never steals focus
-        // from the app the user is in. The editor clears NOACTIVATE while a
-        // note is open so a TextBox can take the keyboard.
+        // Make the window transparent using DWM blur-behind with an empty
+        // region. This avoids WS_POPUP (which corrupts the XAML composition)
+        // and TransparentBackdrop (which isn't available in our SDK version).
+        var rgn = CreateRectRgn(0, 0, -1, -1);
+        var bb = new DWM_BLURBEHIND
+        {
+            dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable = true,
+            hRgnBlur = rgn,
+        };
+        DwmEnableBlurBehindWindow(Hwnd, ref bb);
+        DeleteObject(rgn);
+
+        // Remove rounded corners on Windows 11.
+        DwmSetWindowAttribute(Hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref _cornerPreference, sizeof(uint));
+
         var ex = GetWindowLongPtr(Hwnd, GWL_EXSTYLE).ToInt64() | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         SetWindowLongPtr(Hwnd, GWL_EXSTYLE, (IntPtr)ex);
 
-        // Rooted in a field: a delegate held only by a local can be collected
-        // while the native thunk is still registered, which crashes.
         _subclassProc = OnDeckMessage;
         SetWindowSubclass(Hwnd, _subclassProc, IntPtr.Zero, IntPtr.Zero);
     }
@@ -250,6 +261,33 @@ public sealed class DeckWindow
     private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOZORDER = 0x0004;
+    private const uint DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    // DWMWCP_DONOTROUND = 1 — removes rounded corners on Windows 11.
+    private static uint _cornerPreference = 1;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, uint attr, ref uint attrValue, uint attrSize);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND blurBehind);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int x1, int y1, int x2, int y2);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DWM_BLURBEHIND
+    {
+        public uint dwFlags;
+        public bool fEnable;
+        public IntPtr hRgnBlur;
+        public bool fTransitionOnMaximized;
+    }
+
+    private const uint DWM_BB_ENABLE = 0x00000001;
+    private const uint DWM_BB_BLURREGION = 0x00000002;
 
     [DllImport("comctl32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
