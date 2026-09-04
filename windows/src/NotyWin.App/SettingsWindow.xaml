@@ -10,6 +10,6 @@
                    Foreground="Black" />
         <TextBlock x:Name="StatusText" Text="Loading..." FontSize="14"
                    Foreground="Gray" />
-        <StackPanel x:Name="Content" Spacing="10" />
+        <StackPanel x:Name="ContentPanel" Spacing="10" />
     </StackPanel>
 </Window>
