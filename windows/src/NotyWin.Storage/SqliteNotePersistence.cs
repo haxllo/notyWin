@@ -86,6 +86,10 @@ public sealed class SqliteNotePersistence : INotePersistence, IDisposable
                 Pinned = r.GetInt32(8) != 0,
                 TextDirection = NoteTextDirectionExtensions.FromWire(r.IsDBNull(9) ? null : r.GetString(9)),
             });
+            // Re-derive title if the persisted one is empty but body has content.
+            var last = out_[^1];
+            if (string.IsNullOrEmpty(last.Title) && !string.IsNullOrEmpty(last.Body))
+                last.Title = Note.DerivedTitle(last.Body);
         }
         return out_;
     }
