@@ -7,9 +7,9 @@ namespace NotyWin.App.Deck;
 /// A borderless, no-activate, always-on-top tool window. Mirrors the macOS
 /// <c>NSPanel(.borderless, .nonactivatingPanel)</c> at level <c>.statusBar</c>.
 ///
-/// Chrome is dropped by forcing <c>WS_POPUP</c> on the HWND before the first
-/// show; <c>OverlappedPresenter.SetBorderAndTitleBar</c> still reserved space
-/// for a caption and close button.
+/// Chrome is managed through <see cref="OverlappedPresenter"/>. WinUI owns the
+/// base HWND style; replacing it with <c>WS_POPUP</c> corrupts the XAML
+/// composition target and can leave subsequent windows black.
 ///
 /// Click-through on blank panel regions — the macOS <c>hitTest</c>-returns-nil
 /// behaviour — comes from answering <c>WM_NCHITTEST</c> with
@@ -58,8 +58,9 @@ public sealed class DeckWindow
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(Window);
 
-        // WS_POPUP drops the 1-px OS border and the caption space. Must be set
-        // before the first ShowWindow call.
+        // WS_POPUP removes the 1px OS border and caption space that
+        // OverlappedPresenter still reserves. Must be applied AFTER the XAML
+        // island is created (GetWindowHandle triggers it).
         SetWindowLongPtr(Hwnd, GWL_STYLE, (IntPtr)(WS_POPUP | WS_VISIBLE));
 
         // WS_EX_TOOLWINDOW keeps the deck out of Alt-Tab; WS_EX_NOACTIVATE is
@@ -110,12 +111,18 @@ public sealed class DeckWindow
         return (p.X, p.Y);
     }
 
-    /// <summary>Frame arrives in DIPs (same units as AppWindow.MoveAndResize).</summary>
+    /// <summary>
+    /// Frame arrives in DIPs. AppWindow's RectInt32 API sizes the outer HWND
+    /// in physical pixels. With WS_POPUP there is no non-client chrome.
+    /// </summary>
     public void SetFrame(double x, double y, double w, double h)
     {
+        var scale = DpiScale;
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-            (int)Math.Round(x), (int)Math.Round(y),
-            (int)Math.Round(w), (int)Math.Round(h)));
+            (int)Math.Round(x * scale),
+            (int)Math.Round(y * scale),
+            Math.Max(1, (int)Math.Round(w * scale)),
+            Math.Max(1, (int)Math.Round(h * scale))));
     }
 
     public void Show() => ShowWindow(Hwnd, SW_SHOWNOACTIVATE);
@@ -220,6 +227,12 @@ public sealed class DeckWindow
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
