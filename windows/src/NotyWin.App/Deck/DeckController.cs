@@ -256,6 +256,7 @@ public sealed class DeckController : IDisposable
         if (_exitWork is not null) return;
         _exitWork = new System.Threading.Timer(_ => _dispatcher.TryEnqueue(() =>
         {
+            if (_disposed) return;
             CancelExitWork();
             var (px, py) = DeckWindow.CursorPos();
             var rect = Window.ScreenRect();
@@ -430,6 +431,18 @@ public sealed class DeckController : IDisposable
 
     private void Apply(DeckDecision decision)
     {
+        try
+        {
+            ApplyCore(decision);
+        }
+        catch (Exception ex)
+        {
+            DeckLog.Write("CTRL", $"Apply EX state={decision.Next}: {ex.Message}");
+        }
+    }
+
+    private void ApplyCore(DeckDecision decision)
+    {
         var prev = StateMachine.State;
         StateMachine.State = decision.Next;
         DeckLog.Write("CTRL", $"Apply state={decision.Next} effects=[{string.Join(",", decision.Effects)}]");
@@ -520,6 +533,7 @@ public sealed class DeckController : IDisposable
         {
             _dispatcher.TryEnqueue(() =>
             {
+                if (_disposed) return;
                 var d = StateMachine.Process(DeckInput.IdleTick, Seconds());
                 Apply(d);
             });

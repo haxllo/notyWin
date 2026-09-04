@@ -58,11 +58,6 @@ public sealed class DeckWindow
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(Window);
 
-        // WS_POPUP removes the 1px OS border and caption space that
-        // OverlappedPresenter still reserves. Must be applied AFTER the XAML
-        // island is created (GetWindowHandle triggers it).
-        SetWindowLongPtr(Hwnd, GWL_STYLE, (IntPtr)(WS_POPUP | WS_VISIBLE));
-
         // WS_EX_TOOLWINDOW keeps the deck out of Alt-Tab; WS_EX_NOACTIVATE is
         // the nonactivatingPanel half — clicking the deck never steals focus
         // from the app the user is in. The editor clears NOACTIVATE while a
