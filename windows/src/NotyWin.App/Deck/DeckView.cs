@@ -33,6 +33,7 @@ public sealed class DeckView : UserControl
     private double _panelW;
     private double _panelH;
     private DeckViewModel? _viewModel;
+    private bool _painting;
 
     public DeckViewModel? ViewModel
     {
@@ -154,28 +155,31 @@ public sealed class DeckView : UserControl
 
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        if (ViewModel is null) return;
-        var w = _panelW;
-        var h = _panelH;
-        if (w <= 0 || h <= 0)
-        {
-            w = sender.ActualWidth;
-            h = sender.ActualHeight;
-            if (w <= 0 || h <= 0) return;
-        }
-        var now = Environment.TickCount / 1000.0;
+        if (_painting || ViewModel is null) return;
+        _painting = true;
         try
         {
+            var w = _panelW;
+            var h = _panelH;
+            if (w <= 0 || h <= 0)
+            {
+                w = sender.ActualWidth;
+                h = sender.ActualHeight;
+                if (w <= 0 || h <= 0) return;
+            }
+            var now = Environment.TickCount / 1000.0;
             var frame = ViewModel.Render(h, w, LabelCacheSingleton.Get(), Reveal, now);
             _frame = frame;
             _painter.Paint(args.DrawingSession, frame, w);
         }
         catch (Exception ex)
         {
-            // Win2D geometry creation can throw COMException if the device is
-            // lost or a resource is disposed mid-frame. Log and skip — the
-            // next paint pass will retry with a fresh frame.
-            DeckLog.Write("VIEW", $"OnDraw EX w={w:F0} h={h:F0}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"OnDraw EX: {ex}");
+            DeckLog.Write("VIEW", $"OnDraw EX: {ex.Message}");
+        }
+        finally
+        {
+            _painting = false;
         }
     }
 }
