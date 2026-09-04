@@ -88,7 +88,7 @@ public static class DeckFrame
         };
     }
 
-    private static DeckLayoutResult Fan(
+    public static DeckLayoutResult Fan(
         DisplayRect display, bool onLeftEdge)
     {
         // The fan panel is narrow — just wide enough for the tab edges to

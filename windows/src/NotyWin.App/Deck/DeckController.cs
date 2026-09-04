@@ -77,6 +77,7 @@ public sealed class DeckController : IDisposable
     private bool _showOverFullScreen;
     private bool _inside;
     private bool _disposed;
+    private bool _windowSized;
     private readonly DispatcherQueue _dispatcher;
 
     public DeckController(uint displayId, DisplayRect display, bool showOverFullScreen)
@@ -299,25 +300,27 @@ public sealed class DeckController : IDisposable
 
         var dpi = Window.DpiScale;
         var displayDips = display.ToDips(dpi);
-        var frame = DeckFrame.Layout(
-            StateMachine.State, displayDips, Model.OnLeftEdge,
-            Math.Max(1, Model.NoteCount), Model.NoteWidth,
-            Model.EdgeWidth, Model.DeckYRatio);
-        DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} frame=({frame.X:F0},{frame.Y:F0}) {frame.Width:F0}x{frame.Height:F0} noteCount={Model.NoteCount}");
-        Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
-        // Defer the canvas resize to the next dispatcher frame so the WinUI
-        // composition has time to process the MoveAndResize before we
-        // invalidate the canvas. Painting during an active resize causes
-        // COMException 0x80070490 from the native XAML composition target.
-        var w = frame.Width;
-        var h = frame.Height;
-        _dispatcher.TryEnqueue(() =>
-        {
-            if (_disposed || View is null) return;
-            View.Resize(w, h);
-        });
 
-        if (StateMachine.State == DeckState.Rest)
+        // Always size the window to the maximum fan/expanded dimensions.
+        // Resizing the WinUI window on every state change corrupts the XAML
+        // composition target (COMException 0x80070490). Instead, the canvas
+        // stays at full height and the ViewModel draws pill or fan within it.
+        var maxFrame = DeckFrame.Fan(displayDips, Model.OnLeftEdge);
+        DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} maxFrame=({maxFrame.X:F0},{maxFrame.Y:F0}) {maxFrame.Width:F0}x{maxFrame.Height:F0} noteCount={Model.NoteCount}");
+
+        if (!_windowSized)
+        {
+            Window.SetFrame(maxFrame.X, maxFrame.Y, maxFrame.Width, maxFrame.Height);
+            View?.Resize(maxFrame.Width, maxFrame.Height);
+            _windowSized = true;
+        }
+
+        // Force a repaint so the ViewModel draws the correct state (pill vs fan).
+        View?.Refresh();
+
+        if (StateMachine.State == DeckState.Rest && Model.PillHidden)
+            Window.Hide();
+        else
             Window.Show();
     }
 
