@@ -7,8 +7,7 @@ namespace NotyWin.App.Deck;
 /// </summary>
 internal static class DeckLog
 {
-    private static readonly bool Enabled =
-        Environment.GetEnvironmentVariable("NOTY_DEBUG_DECK") == "1";
+    private static readonly bool Enabled = true;
 
     private static readonly string Path = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

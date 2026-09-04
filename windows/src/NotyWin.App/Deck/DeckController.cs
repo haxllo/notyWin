@@ -304,10 +304,19 @@ public sealed class DeckController : IDisposable
             Math.Max(1, Model.NoteCount), Model.NoteWidth,
             Model.EdgeWidth, Model.DeckYRatio);
         DeckLog.Write("CTRL", $"Relayout state={StateMachine.State} frame=({frame.X:F0},{frame.Y:F0}) {frame.Width:F0}x{frame.Height:F0} noteCount={Model.NoteCount}");
-        // SetWindowPos is synchronous — the window is fully resized before
-        // we invalidate the canvas, avoiding the async MoveAndResize crash.
+
+        // SetWindowPos is synchronous — the Win32 window is fully resized
+        // before it returns. However the XAML composition target may not
+        // have processed the new size yet. Defer the canvas resize to the
+        // next dispatcher frame so the composition is stable.
         Window.SetFrame(frame.X, frame.Y, frame.Width, frame.Height);
-        View?.Resize(frame.Width, frame.Height);
+        var w = frame.Width;
+        var h = frame.Height;
+        _dispatcher.TryEnqueue(() =>
+        {
+            if (_disposed || View is null) return;
+            View.Resize(w, h);
+        });
 
         if (StateMachine.State == DeckState.Rest && Model.PillHidden)
             Window.Hide();
