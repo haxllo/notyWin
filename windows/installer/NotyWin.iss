@@ -1,11 +1,11 @@
-; Inno Setup script for NotyWin
+; Inno Setup script for NotyWin (WPF)
 ; Install: a self-contained, single-folder install that puts the deck on
 ; every display without needing admin rights.
 
 #define MyAppName "NotyWin"
 #define MyAppDisplayName "Noty"
 #define MyAppPublisher "Habeeb"
-#define MyAppExeName "NotyWin.App.exe"
+#define MyAppExeName "NotyWin.App.WPF.exe"
 #define MyAppVersion "1.0.0"
 
 [Setup]
@@ -31,8 +31,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; The publish output of NotyWin.App (win-x64 self-contained).
-Source: "src\NotyWin.App\bin\Release\net10.0-windows10.0.26100.0\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The publish output of NotyWin.App.WPF (win-x64 self-contained).
+Source: "src\NotyWin.App.WPF\bin\Release\net10.0-windows10.0.26100.0\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppDisplayName}"; Filename: "{app}\{#MyAppExeName}"

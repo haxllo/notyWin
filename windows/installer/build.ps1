@@ -12,18 +12,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root "src\NotyWin.App\NotyWin.App.csproj"
+$project = Join-Path $root "src\NotyWin.App.WPF\NotyWin.App.WPF.csproj"
 
-Write-Host "Publishing NotyWin.App ($Rid, $Configuration, self-contained)..."
+Write-Host "Publishing NotyWin.App.WPF ($Rid, $Configuration, self-contained)..."
 dotnet publish $project `
     --configuration $Configuration `
     --runtime $Rid `
     --self-contained true `
-    --property:PublishSingleFile=false `
-    --property:WindowsAppSDKSelfContained=true `
-    --property:WindowsPackageType=None
+    --property:PublishSingleFile=false
 
-$publishDir = Join-Path $root "src\NotyWin.App\bin\$Configuration\net10.0-windows10.0.26100.0\$Rid\publish"
+$publishDir = Join-Path $root "src\NotyWin.App.WPF\bin\$Configuration\net10.0-windows10.0.26100.0\$Rid\publish"
 if (!(Test-Path $publishDir)) {
     throw "Publish directory not found: $publishDir"
 }
