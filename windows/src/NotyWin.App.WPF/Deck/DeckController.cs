@@ -159,17 +159,24 @@ public sealed class DeckController : IDisposable
         if (_exitWork is not null) return;
         _exitWork = new System.Threading.Timer(_ => _dispatcher.BeginInvoke(() =>
         {
-            if (_disposed) return;
-            CancelExitWork();
-            var (px, py) = DeckWindow.CursorPos();
-            var rect = Window.ScreenRect();
-            var zone = HotZone.ForPanel(
-                new PanelFrame(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top),
-                Model.OnLeftEdge);
-            if (!zone.Contains(px, py))
+            try
             {
-                _inside = false;
-                OnPointerExited();
+                if (_disposed) return;
+                CancelExitWork();
+                var (px, py) = DeckWindow.CursorPos();
+                var rect = Window.ScreenRect();
+                var zone = HotZone.ForPanel(
+                    new PanelFrame(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top),
+                    Model.OnLeftEdge);
+                if (!zone.Contains(px, py))
+                {
+                    _inside = false;
+                    OnPointerExited();
+                }
+            }
+            catch (Exception ex)
+            {
+                DeckLog.Write("CTRL", $"ExitWork EX: {ex.Message}");
             }
         }), null, 150, System.Threading.Timeout.Infinite);
     }
@@ -334,7 +341,13 @@ public sealed class DeckController : IDisposable
 
         var expanded = decision.Next == DeckState.Expanded;
         if (!expanded && View is not null)
+        {
+            // CRITICAL: Hide the editor BEFORE resizing the window.
+            // Resizing with the XAML editor still visible can crash WPF's
+            // rendering thread on a transparent overlay window.
             View.Reveal.ExpandedNoteId = null;
+            View.SyncEditor(null, !Model.OnLeftEdge, Model.NoteFontSize);
+        }
 
         if (Has(decision, DeckEffect.CancelExitWork)) CancelExitWork();
 
@@ -371,7 +384,8 @@ public sealed class DeckController : IDisposable
             Window.Show();
 
         View?.Refresh();
-        SyncEditorIfExpanded();
+        if (expanded)
+            SyncEditorIfExpanded();
     }
 
     private void SyncEditorIfExpanded()
