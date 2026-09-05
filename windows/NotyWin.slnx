@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/NotyWin.App/NotyWin.App.csproj" />
+    <Project Path="src/NotyWin.App.WPF/NotyWin.App.WPF.csproj" />
     <Project Path="src/NotyWin.Geometry/NotyWin.Geometry.csproj" />
     <Project Path="src/NotyWin.Models/NotyWin.Models.csproj" />
     <Project Path="src/NotyWin.Rendering/NotyWin.Rendering.csproj" />
