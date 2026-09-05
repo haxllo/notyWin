@@ -14,6 +14,35 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Catch all unhandled exceptions so crashes are logged.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            try
+            {
+                var dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Noty");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "crash.log"),
+                    $"[{DateTime.UtcNow:O}] Domain unhandled: {args.ExceptionObject}\n");
+            }
+            catch { }
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            try
+            {
+                var dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Noty");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "crash.log"),
+                    $"[{DateTime.UtcNow:O}] UI unhandled: {args.Exception}\n");
+            }
+            catch { }
+            args.Handled = true;
+        };
+
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Noty");

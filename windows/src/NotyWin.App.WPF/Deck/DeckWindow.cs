@@ -120,34 +120,37 @@ public sealed class DeckWindow : IDisposable
     }
 
     // WndProc for hit-testing and mouse messages.
+    // For transparent windows, we must ALWAYS set handled=true and return
+    // the hit-test result ourselves — WPF's default handler returns
+    // HTTRANSPARENT for everything on AllowsTransparency windows.
     private IntPtr WndProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         switch ((uint)msg)
         {
             case WM_NCHITTEST:
                 var (sx, sy) = LocalFromScreen(lParam);
-                if (InteractiveFilter?.Invoke(sx, sy) == true)
-                {
-                    handled = false; // Let WPF handle it as HTCLIENT.
-                    return IntPtr.Zero;
-                }
                 handled = true;
-                return new IntPtr(HTTRANSPARENT);
+                return InteractiveFilter?.Invoke(sx, sy) == true
+                    ? new IntPtr(HTCLIENT)
+                    : new IntPtr(HTTRANSPARENT);
 
             case WM_MOUSEMOVE:
                 var (mx, my) = LocalFromClient(lParam);
                 PointerMoved?.Invoke(mx, my);
-                break;
+                handled = true;
+                return IntPtr.Zero;
 
             case WM_LBUTTONDOWN:
                 var (lx, ly) = LocalFromClient(lParam);
                 LeftButtonDown?.Invoke(lx, ly);
-                break;
+                handled = true;
+                return IntPtr.Zero;
 
             case WM_RBUTTONDOWN:
                 var (rx, ry) = LocalFromClient(lParam);
                 RightButtonDown?.Invoke(rx, ry);
-                break;
+                handled = true;
+                return IntPtr.Zero;
         }
         handled = false;
         return IntPtr.Zero;
