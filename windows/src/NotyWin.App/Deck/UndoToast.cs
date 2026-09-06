@@ -95,7 +95,6 @@ public sealed class UndoToast : IDisposable
         presenter.IsMinimizable = false;
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
-        SetWindowLongPtr(_hwnd, GWL_STYLE, (IntPtr)(WS_POPUP | WS_VISIBLE));
         var ex = GetWindowLongPtr(_hwnd, GWL_EXSTYLE).ToInt64() | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, (IntPtr)ex);
 
@@ -230,10 +229,7 @@ public sealed class UndoToast : IDisposable
     }
 
     // P/Invoke
-    private const int GWL_STYLE = -16;
     private const int GWL_EXSTYLE = -20;
-    private const int WS_POPUP = unchecked((int)0x80000000);
-    private const int WS_VISIBLE = 0x10000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int SM_CXSCREEN = 0;

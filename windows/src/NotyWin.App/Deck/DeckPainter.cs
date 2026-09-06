@@ -41,10 +41,6 @@ public sealed class DeckPainter
         {
             DeckLog.Write("PAINT", $"  {ri.Kind} ({ri.X},{ri.Y}) {ri.Width}x{ri.Height} note={ri.Note?.Id?[..8]}");
         }
-        // Debug: paint a magenta border around the whole panel so the user can see its actual size.
-        ds.DrawRectangle(0, 0, (float)panelWidth, frame.Items.Count > 0
-            ? (float)frame.Items.Max(i => i.Y + i.Height)
-            : 100, Color.FromArgb(0xFF, 0xFF, 0, 0xFF), 2);
         foreach (var ri in frame.Items)
         {
             switch (ri.Kind)
@@ -131,7 +127,7 @@ public sealed class DeckPainter
               * Matrix3x2.CreateTranslation(-cx, -cy);
         ds.Transform = save * m;
 
-        var geo = TabGeo(r.X, r.Y, r.Width, r.Height, onRight: true);
+        var geo = TabGeo(ds.Device, r.X, r.Y, r.Width, r.Height, onRight: true);
         ds.FillGeometry(geo, color);
 
         var shadowOpacity = r.Lifted ? 0.42 : (r.IsOpen || r.Hovering ? 0.32 : 0.22);
@@ -171,7 +167,7 @@ public sealed class DeckPainter
     private static void PaintChipTab(CanvasDrawingSession ds, RenderItem r)
     {
         var dash = ColorFromArgb(r.Note!.Palette.DashArgb);
-        var geo = CanvasGeometry.CreateRoundedRectangle(null,
+        var geo = CanvasGeometry.CreateRoundedRectangle(ds.Device,
             new Rect(r.X, r.Y, DeckGeom.ChipWidth, DeckGeom.ChipHeight), 7, 7);
         ds.FillGeometry(geo, dash);
         var shadowOpacity = r.IsOpen ? 0.34 : 0.22;
@@ -182,7 +178,7 @@ public sealed class DeckPainter
 
     private static void PaintEmptyTab(CanvasDrawingSession ds, RenderItem r)
     {
-        var geo = TabGeo(r.X, r.Y, r.Width, r.Height, onRight: true);
+        var geo = TabGeo(ds.Device, r.X, r.Y, r.Width, r.Height, onRight: true);
         ds.FillGeometry(geo, BgMaterial);
         var format = new CanvasTextFormat
         {
@@ -197,7 +193,7 @@ public sealed class DeckPainter
 
     private static void PaintMoreTab(CanvasDrawingSession ds, RenderItem r)
     {
-        var geo = CanvasGeometry.CreateRoundedRectangle(null,
+        var geo = CanvasGeometry.CreateRoundedRectangle(ds.Device,
             new Rect(r.X, r.Y, r.Width, r.Height), 9, 9);
         ds.FillGeometry(geo, BgMaterial);
         var format = new CanvasTextFormat
@@ -270,16 +266,16 @@ public sealed class DeckPainter
 
     // MARK: Paths
 
-    private static CanvasGeometry TabGeo(double x, double y, double w, double h, bool onRight, double radius = 11)
+    private static CanvasGeometry TabGeo(ICanvasResourceCreator resourceCreator, double x, double y, double w, double h, bool onRight, double radius = 11)
     {
         var rect = new Rect(x, y, w, h);
         // Rounded only on the outward-facing side (right edge of screen).
-        return BuildRoundedRectPath(rect, onRight ? 0 : radius, onRight ? radius : 0, onRight ? radius : 0, onRight ? 0 : radius);
+        return BuildRoundedRectPath(resourceCreator, rect, onRight ? 0 : radius, onRight ? radius : 0, onRight ? radius : 0, onRight ? 0 : radius);
     }
 
-    private static CanvasGeometry BuildRoundedRectPath(Rect r, double tl, double tr, double br, double bl)
+    private static CanvasGeometry BuildRoundedRectPath(ICanvasResourceCreator resourceCreator, Rect r, double tl, double tr, double br, double bl)
     {
-        using var builder = new CanvasPathBuilder(null);
+        using var builder = new CanvasPathBuilder(resourceCreator);
         var x = r.X; var y = r.Y; var w = r.Width; var h = r.Height;
         builder.BeginFigure((float)(x + tl), (float)y);
         builder.AddLine((float)(x + w - tr), (float)y);
