@@ -8,7 +8,7 @@
 **Branch:** `hoplite/koroneia-de38b879`
 **Repository:** `haxllo/notyWin`
 **Initial native replacement commit:** `fc9f0d8d01720d616b329d11626c8584690893e3`
-**Published head:** `b17e4d0c1e90189629faf64110814cff3126ffe6`
+**Published feature commit:** `9854c760f43dd19e40909ab30a069c695dba5419`
 
 The old managed WPF/WinUI implementation under `windows/` is deleted. The
 replacement is native Rust/Slint/Win32/SQLite. `Sources/` remains untouched.
@@ -128,7 +128,7 @@ cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-wind
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is an 11,296,256-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,359,232-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
 The import-table audit reports no static `comctl32.dll` dependency. This proves
 the GNU target can link a PE artifact and avoids the reported loader failure;
