@@ -37,6 +37,8 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   Quick Capture, undo, hover lifecycle, and shutdown flushing.
 - `src/platform/` — Win32 windows, input, hotkeys, startup, monitors, DPI,
   fullscreen reconciliation, instance guard, and the deterministic test fallback.
+- `vendor/i-slint-backend-winit/` — pinned Slint 1.17.1 winit backend with the
+  no-muda Windows cfg correction needed by this tray-free app.
 - `README.md`, `BUILD.md`, `ARCHITECTURE.md`, `UI_SPEC.md` — user, build,
   ownership, and reference-derived visual contracts.
 
@@ -80,9 +82,11 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 - `build.rs` resolves the Slint file relative to the Cargo package (`ui/noty.slint`);
   the Slint tree compiles with balanced view blocks and explicit tab/control
   hit areas.
-- The native tree has no static `comctl32.dll` dependency from the deleted
-  managed startup path. Optional Win32 entry points used by the port are looked
-  up at runtime where required.
+- The release executable has no static `comctl32.dll` import. Slint's optional
+  muda/tray integration is disabled, the backend's no-muda Windows cfg is
+  patched locally, and the hit-test subclass entry points are looked up with
+  `LoadLibraryW`/`GetProcAddress` at runtime. Missing exports degrade to the
+  default window procedure instead of preventing startup.
 - Hover routing uses Slint fan/pill surfaces and a fan-wide region rather than a
   conflicting Win32 polling bridge. Repeated hover events do not restart an
   active collapse timer; pill-to-fan, transformed-tab, edge-control, and blank
@@ -106,12 +110,14 @@ cargo test --manifest-path windows/Cargo.toml       # 45 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
+objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is a 12,072,960-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,292,160-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
-This proves the GNU target can link a PE artifact; it does not prove MSVC
-compatibility or Windows runtime behavior.
+The import-table audit reports no static `comctl32.dll` dependency. This proves
+the GNU target can link a PE artifact and avoids the reported loader failure;
+it does not prove MSVC compatibility or Windows runtime behavior.
 
 ## Known limitations and open verification
 

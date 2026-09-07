@@ -50,6 +50,13 @@ fullscreen state is also reconciled periodically because a foreground-window
 change is not guaranteed to emit a display notification. The non-Windows module
 supplies one test display and leaves native styling untouched.
 
+The Slint winit backend is configured directly rather than through the default
+backend selector, because this app does not use a system tray or native menu.
+That keeps the optional muda/comctl32 integration out of the import table. The
+vendored backend contains the upstream no-muda Windows cfg correction required
+by Slint 1.17.1; the edge subclass APIs used for hit testing are loaded with
+`GetProcAddress` when the app starts.
+
 ## Window strategy
 
 One Slint window is maintained per selected display. Rest uses a narrow panel

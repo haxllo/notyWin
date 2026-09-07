@@ -13,11 +13,19 @@ dirs = "6.0.0"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-slint = { version = "1.17.1", features = ["raw-window-handle-06", "unstable-winit-030"] }
+slint = { version = "1.17.1", default-features = false, features = [
+    "compat-1-2",
+    "std",
+    "raw-window-handle-06",
+] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6.2"
+i-slint-backend-winit = { version = "=1.17.1", default-features = false, features = [
+    "raw-window-handle-06",
+    "renderer-femtovg",
+] }
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
@@ -43,3 +51,6 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[patch.crates-io]
+i-slint-backend-winit = { path = "vendor/i-slint-backend-winit" }

@@ -28,7 +28,7 @@ use windows_sys::{
             RegDeleteValueW, RegSetValueExW,
         },
         System::{
-            LibraryLoader::{GetModuleHandleW, GetProcAddress},
+            LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW},
             Threading::{CreateMutexW, GetCurrentProcessId, GetCurrentThreadId},
         },
         UI::{
@@ -39,10 +39,7 @@ use windows_sys::{
             Input::KeyboardAndMouse::{
                 MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, RegisterHotKey, UnregisterHotKey,
             },
-            Shell::{
-                DefSubclassProc, GetWindowSubclass, RemoveWindowSubclass, SetWindowSubclass,
-                ShellExecuteW,
-            },
+            Shell::ShellExecuteW,
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW,
                 DestroyWindow, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GWLP_USERDATA,
@@ -335,6 +332,51 @@ unsafe fn apply_window_style_to_hwnd(
     }
 }
 
+type SubclassProc =
+    Option<unsafe extern "system" fn(HWND, u32, usize, isize, usize, usize) -> LRESULT>;
+type DefSubclassProcFn = unsafe extern "system" fn(HWND, u32, usize, isize) -> LRESULT;
+type GetWindowSubclassFn = unsafe extern "system" fn(HWND, SubclassProc, usize, *mut usize) -> BOOL;
+type RemoveWindowSubclassFn = unsafe extern "system" fn(HWND, SubclassProc, usize) -> BOOL;
+type SetWindowSubclassFn = unsafe extern "system" fn(HWND, SubclassProc, usize, usize) -> BOOL;
+
+#[derive(Clone, Copy)]
+struct ComctlSubclassApi {
+    def_subclass_proc: DefSubclassProcFn,
+    get_window_subclass: GetWindowSubclassFn,
+    remove_window_subclass: RemoveWindowSubclassFn,
+    set_window_subclass: SetWindowSubclassFn,
+}
+
+impl ComctlSubclassApi {
+    unsafe fn load() -> Option<Self> {
+        // Do not make startup depend on an optional comctl32 export being in the import table.
+        let module = unsafe { LoadLibraryW(widestring("comctl32.dll").as_ptr()) };
+        if module.is_null() {
+            return None;
+        }
+        let def_subclass_proc: DefSubclassProcFn =
+            unsafe { mem::transmute(GetProcAddress(module, b"DefSubclassProc\0".as_ptr())?) };
+        let get_window_subclass: GetWindowSubclassFn =
+            unsafe { mem::transmute(GetProcAddress(module, b"GetWindowSubclass\0".as_ptr())?) };
+        let remove_window_subclass: RemoveWindowSubclassFn =
+            unsafe { mem::transmute(GetProcAddress(module, b"RemoveWindowSubclass\0".as_ptr())?) };
+        let set_window_subclass: SetWindowSubclassFn =
+            unsafe { mem::transmute(GetProcAddress(module, b"SetWindowSubclass\0".as_ptr())?) };
+        Some(Self {
+            def_subclass_proc,
+            get_window_subclass,
+            remove_window_subclass,
+            set_window_subclass,
+        })
+    }
+}
+
+fn comctl_subclass_api() -> Option<&'static ComctlSubclassApi> {
+    static API: OnceLock<Option<ComctlSubclassApi>> = OnceLock::new();
+    API.get_or_init(|| unsafe { ComctlSubclassApi::load() })
+        .as_ref()
+}
+
 const HIT_TEST_SUBCLASS_ID: usize = 0x4E_54;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -375,10 +417,20 @@ unsafe extern "system" fn hit_test_subclass(
         }
     }
 
-    let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+    let result = if let Some(api) = comctl_subclass_api() {
+        unsafe { (api.def_subclass_proc)(hwnd, message, wparam, lparam) }
+    } else {
+        unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+    };
     if message == WM_NCDESTROY && reference_data != 0 {
         unsafe {
-            let _ = RemoveWindowSubclass(hwnd, Some(hit_test_subclass), HIT_TEST_SUBCLASS_ID);
+            if let Some(api) = comctl_subclass_api() {
+                let _ = (api.remove_window_subclass)(
+                    hwnd,
+                    Some(hit_test_subclass),
+                    HIT_TEST_SUBCLASS_ID,
+                );
+            }
             drop(Box::from_raw(reference_data as *mut HitTestState));
         }
     }
@@ -393,9 +445,12 @@ unsafe fn update_hit_test_subclass(hwnd: HWND, mode: HitTestMode) {
 }
 
 unsafe fn update_window_subclass(hwnd: HWND, mode: HitTestMode, layer: WindowLayer) {
+    let Some(api) = comctl_subclass_api() else {
+        return;
+    };
     let mut reference_data = 0usize;
     if unsafe {
-        GetWindowSubclass(
+        (api.get_window_subclass)(
             hwnd,
             Some(hit_test_subclass),
             HIT_TEST_SUBCLASS_ID,
@@ -413,7 +468,7 @@ unsafe fn update_window_subclass(hwnd: HWND, mode: HitTestMode, layer: WindowLay
     }
     let state = Box::into_raw(Box::new(HitTestState { mode, layer }));
     if unsafe {
-        SetWindowSubclass(
+        (api.set_window_subclass)(
             hwnd,
             Some(hit_test_subclass),
             HIT_TEST_SUBCLASS_ID,
@@ -428,9 +483,12 @@ unsafe fn update_window_subclass(hwnd: HWND, mode: HitTestMode, layer: WindowLay
 }
 
 fn window_layer(hwnd: HWND) -> WindowLayer {
+    let Some(api) = comctl_subclass_api() else {
+        return WindowLayer::Application;
+    };
     let mut reference_data = 0usize;
     if unsafe {
-        GetWindowSubclass(
+        (api.get_window_subclass)(
             hwnd,
             Some(hit_test_subclass),
             HIT_TEST_SUBCLASS_ID,

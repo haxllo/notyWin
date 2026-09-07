@@ -15,6 +15,12 @@ rustup target add x86_64-pc-windows-msvc
 No browser runtime, Node.js, .NET runtime, or external SQLite installation is
 required. `rusqlite` builds SQLite into the executable.
 
+The manifest uses Slint's winit backend directly and disables the optional
+system-tray/menu integration. This avoids a static comctl32 subclass import;
+the native hit-test subclass APIs are resolved at runtime instead. The small
+Slint backend compatibility patch is vendored under `vendor/i-slint-backend-winit`
+so clean builds use the same dependency graph.
+
 The native project is not a browser preview, so the repository's web Preview
 server is intentionally not used. Run Cargo directly from `windows\` or pass
 `--manifest-path windows/Cargo.toml` from the repository root.

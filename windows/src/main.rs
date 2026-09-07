@@ -82,11 +82,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 #[cfg(windows)]
 fn configure_backend() -> Result<(), slint::PlatformError> {
-    use slint::winit_030::winit::platform::windows::WindowAttributesExtWindows;
+    use i_slint_backend_winit::winit::platform::windows::WindowAttributesExtWindows;
 
-    slint::BackendSelector::new()
-        .backend_name("winit".into())
-        .with_winit_window_attributes_hook(|attributes| {
+    let backend = i_slint_backend_winit::Backend::builder()
+        .with_window_attributes_hook(|attributes| {
             attributes
                 .with_decorations(false)
                 .with_resizable(false)
@@ -94,7 +93,9 @@ fn configure_backend() -> Result<(), slint::PlatformError> {
                 .with_active(false)
                 .with_skip_taskbar(true)
         })
-        .select()
+        .build()?;
+    slint::platform::set_platform(Box::new(backend))
+        .map_err(|error| slint::PlatformError::from(error.to_string()))
 }
 
 #[cfg(not(windows))]
