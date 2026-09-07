@@ -2387,6 +2387,27 @@ fn deck_hit_test_mode(
         });
     }
 
+    // Keep the pointer attached while it crosses from the edge pill to the fan tabs.
+    let bridge_x = if left_edge {
+        0
+    } else {
+        item.x.saturating_add(item.width as i32)
+    }
+    .clamp(0, frame.width as i32);
+    let bridge_width = if left_edge {
+        item.x.clamp(0, frame.width as i32) as u32
+    } else {
+        frame.width.saturating_sub(bridge_x as u32)
+    };
+    if bridge_width > 0 {
+        regions.push(HitTestRect {
+            x: bridge_x,
+            y: 0,
+            width: bridge_width,
+            height: frame.height,
+        });
+    }
+
     HitTestMode::Regions(regions)
 }
 
@@ -3150,7 +3171,28 @@ mod tests {
 
         assert!(mode.accepts(10, 40));
         assert!(mode.accepts(10, 380));
+        assert!(mode.accepts(45, 200));
         assert!(!mode.accepts(2, 200));
+
+        let left_mode = deck_hit_test_mode(
+            View::Deck,
+            DeckState::Fan,
+            Some(PanelGeometry {
+                x: 0,
+                y: 300,
+                width: 50,
+                height: 420,
+            }),
+            true,
+            DeckStyle::LabelledTabs,
+            1.0,
+            1.0,
+            1,
+            0,
+            false,
+        );
+        assert!(left_mode.accepts(5, 200));
+        assert!(!left_mode.accepts(48, 200));
     }
 
     #[test]
