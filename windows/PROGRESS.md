@@ -92,8 +92,9 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   active collapse timer; pill-to-fan, transformed-tab, edge-control, and blank
   fan hit-test cases have host coverage.
 - Startup visibility/configuration ordering, primary-window hover flags,
-  screen-edge placement, fan collapse timing, and active-display gating were
-  corrected. The fan layout and Slint edge geometry share the same dimensions.
+  screen-edge placement, 200 ms fan collapse timing, and active-display gating
+  were corrected. The fan layout and Slint edge geometry share the same
+  dimensions.
 - Win32 monitor enumeration, per-monitor DPI awareness, `WM_DPICHANGED`
   refresh routing, borderless tool windows, startup registration, global
   hotkeys, single-instance protection, display watching, fullscreen

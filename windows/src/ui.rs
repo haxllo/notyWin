@@ -15,6 +15,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const FAN_COLLAPSE_DELAY: Duration = Duration::from_millis(200);
+
 pub struct Controller {
     pub state: AppState,
     persist_timer: Timer,
@@ -1272,7 +1274,7 @@ impl Controller {
                     if expanded {
                         Duration::from_secs(60)
                     } else {
-                        Duration::from_secs(4)
+                        FAN_COLLAPSE_DELAY
                     },
                     display_id.or(self.hovered_display_id),
                 );
@@ -1344,7 +1346,7 @@ impl Controller {
             && self.state.pending_deletes.is_empty()
         {
             self.schedule_hover_collapse(
-                Duration::from_secs(4),
+                FAN_COLLAPSE_DELAY,
                 self.hovered_display_id.or(self.state.active_display_id),
             );
         }
