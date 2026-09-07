@@ -8,7 +8,7 @@
 **Branch:** `hoplite/koroneia-de38b879`
 **Repository:** `haxllo/notyWin`
 **Initial native replacement commit:** `fc9f0d8d01720d616b329d11626c8584690893e3`
-**Published feature commit:** `9854c760f43dd19e40909ab30a069c695dba5419`
+**Published feature commit:** `7dd34ccc0b5dff6645f789bdee29fdcc6111c8f8`
 
 The old managed WPF/WinUI implementation under `windows/` is deleted. The
 replacement is native Rust/Slint/Win32/SQLite. `Sources/` remains untouched.
