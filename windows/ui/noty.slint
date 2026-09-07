@@ -145,6 +145,7 @@ export component NotyWindow inherits Window {
     in property <int> hidden-count: 0;
     in property <string> deck-style: "tabs";
     in property <bool> deck-always-shown: false;
+    in property <bool> fan-show-all: false;
     in property <float> deck-scale: 1.0;
     in property <bool> launch-at-login: false;
     in property <bool> show-over-fullscreen: false;
@@ -159,6 +160,7 @@ export component NotyWindow inherits Window {
     callback escape-pressed();
     callback back-to-deck();
     callback undo-delete();
+    callback reveal-more-notes();
     callback note-clicked(string);
     callback note-context-action(string, string);
     callback create-note();
@@ -212,6 +214,10 @@ export component NotyWindow inherits Window {
         ? fan-edge-margin : root.width - fan-item-width - fan-edge-margin;
     private property <length> fan-more-y: fan-top + notes.length * fan-item-pitch + 18px * deck-scale;
     private property <length> fan-more-height: 34px * deck-scale;
+    private property <length> fan-content-bottom: !fan-show-all && hidden-count > 0
+        ? fan-more-y + fan-more-height + 12px * deck-scale
+        : fan-top + notes.length * fan-item-pitch + fan-item-height;
+    private property <length> fan-scroll-height: max(1px, root.height - control-size - 74px);
     private property <bool> library-list-focused: false;
 
     changed markdown-preview => {
@@ -333,106 +339,120 @@ export component NotyWindow inherits Window {
             width: root.width;
             height: root.height;
             background: transparent;
-            for note[index] in notes : Rectangle {
-                x: fan-item-x;
-                y: fan-top + index * fan-item-pitch;
-                width: fan-item-width;
-                height: fan-item-height;
-                border-radius: deck-style == "tabs" ? 12px : 8px;
-                background: note.paper;
-                opacity: 1.0;
-                transform-rotation: deck-style == "tabs" ? (left-edge ? 3deg : -3deg) : 0deg;
-                animate y { duration: 220ms; delay: index * 42ms; easing: ease-out; }
+            fan-scroll := Flickable {
+                x: 0px;
+                y: 0px;
+                width: root.width;
+                height: fan-scroll-height;
+                viewport-width: self.width;
+                viewport-height: max(self.height, fan-content-bottom);
 
-                if note.pinned: Rectangle {
-                    x: left-edge ? 4px : 21px;
-                    y: 8px;
-                    width: 5px;
-                    height: 5px;
-                    border-radius: 3px;
-                    background: note.dash;
-                }
-                if deck-style == "tabs": Text {
-                    x: 5px;
-                    y: 10px;
-                    width: 96px;
-                    height: 86px;
-                    text: note.tab-title;
-                    color: note.ink;
-                    font-size: 9px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    transform-rotation: left-edge ? 90deg : -90deg;
-                    overflow: clip;
-                }
-                if deck-style == "chips": Text {
-                    x: 3px;
-                    y: 2px;
-                    width: 18px;
-                    height: 20px;
-                    text: note.title;
-                    color: note.ink;
-                    font-size: 7px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    overflow: clip;
-                }
-                TouchArea {
-                    x: deck-style == "tabs" ? -3px : 0px;
-                    y: deck-style == "tabs" ? -1px : 0px;
-                    width: deck-style == "tabs" ? parent.width + 6px : parent.width;
-                    height: deck-style == "tabs" ? parent.height + 2px : parent.height;
-                    clicked => { root.note-clicked(note.id); }
-                }
-                ContextMenuArea {
-                    width: parent.width;
-                    height: parent.height;
-                    Menu {
-                        MenuItem {
-                            title: note.pinned ? "Unpin" : "Pin";
-                            activated => { root.note-context-action(note.id, "pin"); }
+                Rectangle {
+                    width: root.width;
+                    height: fan-content-bottom;
+
+                    for note[index] in notes : Rectangle {
+                        x: fan-item-x;
+                        y: fan-top + index * fan-item-pitch;
+                        width: fan-item-width;
+                        height: fan-item-height;
+                        border-radius: deck-style == "tabs" ? 12px : 8px;
+                        background: note.paper;
+                        opacity: 1.0;
+                        transform-rotation: deck-style == "tabs" ? (left-edge ? 3deg : -3deg) : 0deg;
+                        animate y { duration: 220ms; delay: index * 42ms; easing: ease-out; }
+
+                        if note.pinned: Rectangle {
+                            x: left-edge ? 4px : 21px;
+                            y: 8px;
+                            width: 5px;
+                            height: 5px;
+                            border-radius: 3px;
+                            background: note.dash;
                         }
-                        MenuItem {
-                            title: "Archive";
-                            activated => { root.note-context-action(note.id, "archive"); }
+                        if deck-style == "tabs": Text {
+                            x: 5px;
+                            y: 10px;
+                            width: 96px;
+                            height: 86px;
+                            text: note.tab-title;
+                            color: note.ink;
+                            font-size: 9px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            transform-rotation: left-edge ? 90deg : -90deg;
+                            overflow: clip;
                         }
-                        Menu {
-                            title: "Colour";
-                            MenuItem { title: "Gold"; activated => { root.note-context-action(note.id, "colour-0"); } }
-                            MenuItem { title: "Orange"; activated => { root.note-context-action(note.id, "colour-1"); } }
-                            MenuItem { title: "Pink"; activated => { root.note-context-action(note.id, "colour-2"); } }
-                            MenuItem { title: "Purple"; activated => { root.note-context-action(note.id, "colour-3"); } }
-                            MenuItem { title: "Blue"; activated => { root.note-context-action(note.id, "colour-4"); } }
-                            MenuItem { title: "Green"; activated => { root.note-context-action(note.id, "colour-5"); } }
-                            MenuItem { title: "Sand"; activated => { root.note-context-action(note.id, "colour-6"); } }
-                            MenuItem { title: "Slate"; activated => { root.note-context-action(note.id, "colour-7"); } }
+                        if deck-style == "chips": Text {
+                            x: 3px;
+                            y: 2px;
+                            width: 18px;
+                            height: 20px;
+                            text: note.title;
+                            color: note.ink;
+                            font-size: 7px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            overflow: clip;
                         }
-                        MenuItem {
-                            title: "Delete";
-                            activated => { root.note-context-action(note.id, "delete"); }
+                        TouchArea {
+                            x: deck-style == "tabs" ? -3px : 0px;
+                            y: deck-style == "tabs" ? -1px : 0px;
+                            width: deck-style == "tabs" ? parent.width + 6px : parent.width;
+                            height: deck-style == "tabs" ? parent.height + 2px : parent.height;
+                            clicked => { root.note-clicked(note.id); }
+                        }
+                        ContextMenuArea {
+                            width: parent.width;
+                            height: parent.height;
+                            Menu {
+                                MenuItem {
+                                    title: note.pinned ? "Unpin" : "Pin";
+                                    activated => { root.note-context-action(note.id, "pin"); }
+                                }
+                                MenuItem {
+                                    title: "Archive";
+                                    activated => { root.note-context-action(note.id, "archive"); }
+                                }
+                                Menu {
+                                    title: "Colour";
+                                    MenuItem { title: "Gold"; activated => { root.note-context-action(note.id, "colour-0"); } }
+                                    MenuItem { title: "Orange"; activated => { root.note-context-action(note.id, "colour-1"); } }
+                                    MenuItem { title: "Pink"; activated => { root.note-context-action(note.id, "colour-2"); } }
+                                    MenuItem { title: "Purple"; activated => { root.note-context-action(note.id, "colour-3"); } }
+                                    MenuItem { title: "Blue"; activated => { root.note-context-action(note.id, "colour-4"); } }
+                                    MenuItem { title: "Green"; activated => { root.note-context-action(note.id, "colour-5"); } }
+                                    MenuItem { title: "Sand"; activated => { root.note-context-action(note.id, "colour-6"); } }
+                                    MenuItem { title: "Slate"; activated => { root.note-context-action(note.id, "colour-7"); } }
+                                }
+                                MenuItem {
+                                    title: "Delete";
+                                    activated => { root.note-context-action(note.id, "delete"); }
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            if hidden-count > 0: Rectangle {
-                x: fan-item-x;
-                y: fan-more-y;
-                width: fan-item-width;
-                height: fan-more-height;
-                border-radius: 10px;
-                background: #a86f66;
-                opacity: 0.9;
-                Text {
-                    width: 100%; height: 100%;
-                    text: "+" + hidden-count;
-                    color: #fff2e9;
-                    font-size: 12px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                    if hidden-count > 0: Rectangle {
+                        x: fan-item-x;
+                        y: fan-more-y;
+                        width: fan-item-width;
+                        height: fan-more-height;
+                        border-radius: 10px;
+                        background: #a86f66;
+                        opacity: 0.9;
+                        Text {
+                            width: 100%; height: 100%;
+                            text: "+" + hidden-count;
+                            color: #fff2e9;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        TouchArea { clicked => { root.reveal-more-notes(); } }
+                    }
                 }
-                TouchArea { clicked => { root.open-library(); } }
             }
 
             Rectangle {

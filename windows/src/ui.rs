@@ -1,4 +1,4 @@
-use crate::deck::{DeckState, PanelGeometry, geometry_with_activation};
+use crate::deck::{DeckState, PanelGeometry};
 use crate::model::{
     DeckStyle, MAX_PILL_DASHES, Note, PendingDelete, Settings, toggle_task_at_cursor,
     toggle_task_line as toggle_task_line_body,
@@ -44,6 +44,7 @@ pub struct AppState {
     pub view: View,
     pub expanded_id: Option<String>,
     pub selected_id: Option<String>,
+    pub fan_show_all: bool,
     pub markdown_preview: bool,
     pub save_state: SaveState,
     pub find_visible: bool,
@@ -138,6 +139,7 @@ impl AppState {
             view: View::Deck,
             expanded_id: None,
             selected_id: None,
+            fan_show_all: false,
             markdown_preview,
             save_state: SaveState::Saved,
             find_visible: false,
@@ -539,6 +541,15 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            ui.on_reveal_more_notes(move || {
+                if let Some(controller) = weak.upgrade() {
+                    controller.borrow_mut().reveal_more_notes();
+                    Controller::refresh(&controller);
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
             ui.on_open_library(move || {
                 if let Some(controller) = weak.upgrade() {
                     controller.borrow_mut().open_library(false);
@@ -929,6 +940,16 @@ impl Controller {
                 if let Some(controller) = weak.upgrade() {
                     Controller::dispatch(&controller, |controller| {
                         controller.find_next(forward);
+                    });
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
+            ui.on_reveal_more_notes(move || {
+                if let Some(controller) = weak.upgrade() {
+                    Controller::dispatch(&controller, |controller| {
+                        controller.reveal_more_notes();
                     });
                 }
             });
@@ -1387,6 +1408,7 @@ impl Controller {
                         if should_close {
                             state.close_note();
                         } else {
+                            state.state.fan_show_all = false;
                             state.state.deck_state = DeckState::Rest;
                         }
                         drop(state);
@@ -1419,6 +1441,7 @@ impl Controller {
                 if self.state.deck_state == DeckState::Fan
                     && self.state.pending_deletes.is_empty() =>
             {
+                self.state.fan_show_all = false;
                 self.state.deck_state = DeckState::Rest;
             }
             View::Deck => {}
@@ -1428,6 +1451,7 @@ impl Controller {
     fn return_to_deck(&mut self) {
         self.cancel_hover_collapse();
         self.flush_pending();
+        self.state.fan_show_all = false;
         let capture_origin = if self.state.view == View::Capture {
             self.state.capture_origin.take()
         } else {
@@ -1456,6 +1480,7 @@ impl Controller {
     fn open_library(&mut self, archive: bool) {
         self.cancel_hover_collapse();
         self.flush_pending();
+        self.state.fan_show_all = false;
         self.state.expanded_id = None;
         self.state.library_archive = archive;
         self.state.view = View::Library;
@@ -1467,6 +1492,7 @@ impl Controller {
     fn open_settings(&mut self) {
         self.cancel_hover_collapse();
         self.flush_pending();
+        self.state.fan_show_all = false;
         self.state.expanded_id = None;
         self.state.view = View::Settings;
         self.state.deck_state = DeckState::Rest;
@@ -1477,6 +1503,7 @@ impl Controller {
     fn open_capture(&mut self) {
         self.cancel_hover_collapse();
         self.flush_pending();
+        self.state.fan_show_all = false;
         if self.state.view != View::Capture {
             self.state.capture_origin = Some(CaptureOrigin {
                 view: self.state.view,
@@ -1500,6 +1527,16 @@ impl Controller {
         }
     }
 
+    fn reveal_more_notes(&mut self) {
+        if self.state.view == View::Deck
+            && self.state.deck_state == DeckState::Fan
+            && self.state.active_notes().len() > MAX_VISIBLE_TABS
+        {
+            self.cancel_hover_collapse();
+            self.state.fan_show_all = true;
+        }
+    }
+
     fn capture_previous_foreground(&mut self) {
         if self.previous_foreground.is_none() {
             self.previous_foreground = platform::capture_foreground();
@@ -1513,6 +1550,7 @@ impl Controller {
             active_display_id,
             view,
             deck_state,
+            fan_show_all,
             settings,
             active_notes,
             library_notes,
@@ -1555,6 +1593,7 @@ impl Controller {
                 state.active_display_id,
                 state.view,
                 state.deck_state,
+                state.fan_show_all,
                 state.settings.clone(),
                 state.active_notes(),
                 library_notes,
@@ -1612,6 +1651,8 @@ impl Controller {
             } else {
                 let limit = if local_deck_state == DeckState::Rest {
                     MAX_PILL_DASHES
+                } else if fan_show_all && local_deck_state == DeckState::Fan {
+                    active_notes.len()
                 } else {
                     MAX_VISIBLE_TABS
                 };
@@ -1619,13 +1660,16 @@ impl Controller {
             };
             let hidden_count = if local_view == View::Deck && local_deck_state == DeckState::Rest {
                 active_notes.len().saturating_sub(MAX_PILL_DASHES)
-            } else if local_view == View::Deck && local_deck_state == DeckState::Fan {
+            } else if local_view == View::Deck
+                && local_deck_state == DeckState::Fan
+                && !fan_show_all
+            {
                 active_notes.len().saturating_sub(MAX_VISIBLE_TABS)
             } else {
                 0
             };
             let mut frame = if local_view == View::Deck {
-                Some(geometry_with_activation(
+                Some(crate::deck::geometry_with_activation_and_visibility(
                     display.work_area,
                     local_deck_state,
                     settings.deck_on_left_edge,
@@ -1636,6 +1680,7 @@ impl Controller {
                     settings.note_height as u32,
                     active_notes.len(),
                     settings.edge_activation,
+                    fan_show_all && local_deck_state == DeckState::Fan,
                 ))
             } else {
                 None
@@ -1678,6 +1723,7 @@ impl Controller {
             ui.set_view(local_view.as_str().into());
             ui.set_left_edge(settings.deck_on_left_edge);
             ui.set_hidden_count(hidden_count as i32);
+            ui.set_fan_show_all(fan_show_all && local_deck_state == DeckState::Fan);
             ui.set_library_archive(library_archive);
             ui.set_library_selection_index(library_selection_index);
             ui.set_library_query(library_query.clone().into());
@@ -1792,6 +1838,7 @@ impl Controller {
             self.state.expanded_id = Some(id.clone());
             self.state.selected_id = Some(id);
             self.state.view = View::Deck;
+            self.state.fan_show_all = false;
             self.state.deck_state = DeckState::Expanded;
             self.activation_requested = true;
         }
@@ -1814,6 +1861,7 @@ impl Controller {
         self.state.notes.push(note);
         self.state.selected_id = Some(id.clone());
         self.state.view = View::Deck;
+        self.state.fan_show_all = false;
         self.state.deck_state = if open {
             DeckState::Expanded
         } else {
@@ -1839,6 +1887,7 @@ impl Controller {
             self.state.save_note(&note);
         }
         self.state.expanded_id = None;
+        self.state.fan_show_all = false;
         self.state.deck_state = DeckState::Fan;
         self.state.view = View::Deck;
         if restore_foreground {
@@ -1888,6 +1937,7 @@ impl Controller {
             }
         }
         self.state.expanded_id = None;
+        self.state.fan_show_all = false;
         self.state.deck_state = DeckState::Fan;
         if in_library {
             self.state.reconcile_selection();
@@ -1923,6 +1973,7 @@ impl Controller {
         });
         self.schedule_delete_expiry();
         self.state.expanded_id = None;
+        self.state.fan_show_all = false;
         self.state.deck_state = DeckState::Fan;
         if in_library {
             self.state.reconcile_selection();
@@ -2405,7 +2456,13 @@ fn deck_hit_test_mode(
     let deck_scale = deck_scale.clamp(0.7, 1.8);
     let physical = |value: f32| value.round().max(1.0) as u32;
     let item = fan_item_layout(frame, left_edge, style, deck_scale, display_scale);
-    let mut regions = Vec::with_capacity(shown_count + 4);
+    let show_all = shown_count > MAX_VISIBLE_TABS && hidden_count == 0;
+    let hit_item_count = if show_all {
+        shown_count.min(MAX_VISIBLE_TABS)
+    } else {
+        shown_count
+    };
+    let mut regions = Vec::with_capacity(hit_item_count + 5);
     let tab_hit_padding = if style == DeckStyle::LabelledTabs {
         physical(3.0 * deck_scale * display_scale) as i32
     } else {
@@ -2418,7 +2475,7 @@ fn deck_hit_test_mode(
     };
     // The tab cards are rotated by three degrees, so their painted bounds are
     // slightly wider than the untransformed layout rectangles.
-    for index in 0..shown_count {
+    for index in 0..hit_item_count {
         regions.push(HitTestRect {
             x: item.x - tab_hit_padding,
             y: item.top + index as i32 * item.pitch as i32 - tab_hit_vertical_padding,
@@ -2433,6 +2490,19 @@ fn deck_hit_test_mode(
             y: item.top + shown_count as i32 * item.pitch as i32 + item.more_gap,
             width: item.width,
             height: item.more_height,
+        });
+    }
+
+    if show_all {
+        let control_size = physical(28.0 * deck_scale * display_scale);
+        let scroll_bottom =
+            (frame.height as i32 - control_size as i32 - physical(74.0 * display_scale) as i32)
+                .max(item.top);
+        regions.push(HitTestRect {
+            x: item.x,
+            y: item.top,
+            width: item.width,
+            height: scroll_bottom.saturating_sub(item.top) as u32,
         });
     }
 
@@ -2786,6 +2856,7 @@ mod tests {
             view: View::Deck,
             expanded_id: None,
             selected_id: None,
+            fan_show_all: false,
             markdown_preview: Settings::default().markdown_styling,
             save_state: SaveState::Saved,
             find_visible: false,
@@ -3087,6 +3158,45 @@ mod tests {
                 .expect("load saved note");
             assert_eq!(saved[0].body, "second");
         }
+    }
+
+    #[test]
+    fn fan_reveal_exposes_hidden_notes_and_resets_on_escape() {
+        let controller = test_controller(notes(MAX_VISIBLE_TABS + 1));
+        {
+            let mut controller = controller.borrow_mut();
+            controller.state.deck_state = DeckState::Fan;
+            controller.reveal_more_notes();
+            assert!(controller.state.fan_show_all);
+
+            controller.handle_escape();
+            assert!(!controller.state.fan_show_all);
+            assert_eq!(controller.state.deck_state, DeckState::Rest);
+        }
+    }
+
+    #[test]
+    fn revealed_fan_hit_testing_keeps_the_scroll_column_interactive() {
+        let mode = deck_hit_test_mode(
+            View::Deck,
+            DeckState::Fan,
+            Some(PanelGeometry {
+                x: 0,
+                y: 0,
+                width: 120,
+                height: 700,
+            }),
+            false,
+            DeckStyle::LabelledTabs,
+            1.0,
+            1.0,
+            MAX_VISIBLE_TABS + 4,
+            0,
+            false,
+        );
+
+        assert!(mode.accepts(100, 300));
+        assert!(!mode.accepts(2, 300));
     }
 
     #[test]

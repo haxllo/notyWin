@@ -92,10 +92,15 @@ fn fan_layout(
     note_count: usize,
     deck_scale: f32,
     display_scale: f32,
+    show_all: bool,
 ) -> FanLayout {
     let deck_pixels = |value| physical_pixels(value, deck_scale * display_scale);
     let display_pixels = |value| physical_pixels(value, display_scale);
-    let shown = note_count.min(MAX_VISIBLE_TABS).max(1) as u32;
+    let shown = if show_all {
+        note_count.max(1)
+    } else {
+        note_count.min(MAX_VISIBLE_TABS).max(1)
+    } as u32;
     let edge_margin = display_pixels(12.0);
     let tab_width = deck_pixels(30.0);
     let item_width = match style {
@@ -117,7 +122,7 @@ fn fan_layout(
     let item_bottom = top
         .saturating_add(shown.saturating_sub(1).saturating_mul(pitch))
         .saturating_add(item_height);
-    let more_bottom = if note_count > MAX_VISIBLE_TABS {
+    let more_bottom = if !show_all && note_count > MAX_VISIBLE_TABS {
         let more_pitch = match style {
             DeckStyle::LabelledTabs => pitch,
             DeckStyle::ColourChips => display_pixels(36.0),
@@ -166,6 +171,34 @@ pub fn geometry(
     )
 }
 
+pub fn geometry_with_activation_and_visibility(
+    work: WorkArea,
+    state: DeckState,
+    on_left_edge: bool,
+    scale: f32,
+    deck_y_ratio: f32,
+    style: DeckStyle,
+    note_width: u32,
+    note_height: u32,
+    note_count: usize,
+    edge_activation: f32,
+    show_all: bool,
+) -> PanelGeometry {
+    geometry_with_activation_inner(
+        work,
+        state,
+        on_left_edge,
+        scale,
+        deck_y_ratio,
+        style,
+        note_width,
+        note_height,
+        note_count,
+        edge_activation,
+        show_all,
+    )
+}
+
 pub fn geometry_with_activation(
     work: WorkArea,
     state: DeckState,
@@ -177,6 +210,34 @@ pub fn geometry_with_activation(
     note_height: u32,
     note_count: usize,
     edge_activation: f32,
+) -> PanelGeometry {
+    geometry_with_activation_inner(
+        work,
+        state,
+        on_left_edge,
+        scale,
+        deck_y_ratio,
+        style,
+        note_width,
+        note_height,
+        note_count,
+        edge_activation,
+        false,
+    )
+}
+
+fn geometry_with_activation_inner(
+    work: WorkArea,
+    state: DeckState,
+    on_left_edge: bool,
+    scale: f32,
+    deck_y_ratio: f32,
+    style: DeckStyle,
+    note_width: u32,
+    note_height: u32,
+    note_count: usize,
+    edge_activation: f32,
+    show_all: bool,
 ) -> PanelGeometry {
     let deck_scale = scale.clamp(0.7, 1.8);
     let display_scale = work.logical_scale();
@@ -191,7 +252,7 @@ pub fn geometry_with_activation(
             metrics.pill_height(note_count, scale),
         ),
         DeckState::Fan => {
-            let layout = fan_layout(style, note_count, deck_scale, display_scale);
+            let layout = fan_layout(style, note_count, deck_scale, display_scale, show_all);
             (layout.width, layout.height.min(work.height.max(1)))
         }
         DeckState::Expanded => {
@@ -373,6 +434,28 @@ mod tests {
         assert_eq!(panel.height, 716);
         assert!(panel.y >= work.y);
         assert!(panel.y + panel.height as i32 <= work.y + work.height as i32);
+    }
+
+    #[test]
+    fn revealed_fan_caps_to_the_work_area_for_many_notes() {
+        let work = area();
+        let panel = geometry_with_activation_and_visibility(
+            work,
+            DeckState::Fan,
+            false,
+            1.0,
+            0.5,
+            DeckStyle::LabelledTabs,
+            720,
+            580,
+            24,
+            20.0,
+            true,
+        );
+
+        assert_eq!(panel.height, work.height);
+        assert!(panel.width >= 50);
+        assert!(panel.y >= work.y);
     }
 
     #[test]
