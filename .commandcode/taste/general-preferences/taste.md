@@ -1,0 +1,23 @@
+# General Preferences
+- Always use this identity for git commits: `git commit --author="Habeeb <mshabeeburrahman786@gmail.com>" -m "message"`. Never use other co-author lines. Confidence: 1.0
+- Commit after each logical step — don't batch multiple steps into one commit. Confidence: 0.9
+- Use Inno Setup for Windows installer creation. Confidence: 0.9
+- When porting an app across platforms, verify UI and logic are in sync at each step — don't just check logic or UI in isolation. Confidence: 0.8
+- When given a broad multi-phase directive, plan systematically: produce a gap/audit map, a todo list with phases, and work through it step-by-step. Confidence: 0.85
+- After every code change, run `dotnet build` followed by `dotnet test` and confirm all tests pass before committing. Tests must stay green at every commit. Confidence: 0.9
+- For cross-platform ports, create and maintain a written feature-parity/gap map document (e.g. `GAP_MAP.md`) at the start and update it as work progresses. Confidence: 0.8
+- When visual bugs persist, use screenshots as the ground truth and iterate with clean rebuilds (`Remove-Item bin,obj -Recurse -Force` then rebuild) before drawing conclusions. Confidence: 0.75
+- Project layout: Windows port lives at `C:\Users\mshab\Projects\noty\windows\`, Swift source at `C:\Users\mshab\Projects\noty\Sources\`. NotyWin solution uses `NotyWin.slnx` with projects under `src\`. Confidence: 0.85
+- When a UI rendering bug persists after multiple fix attempts, activate project-specific skills (e.g. `windows-app-developer`, `winui-dev-workflow`) to investigate rather than continuing to guess. Confidence: 0.9
+- Never name XAML elements `x:Name="Content"` — it shadows `Window.Content` and breaks WinUI 3 rendering. Use `ContentPanel` or similar instead. Confidence: 0.95
+- Prefer `winapp run .` (WinApp CLI) for running/debugging WinUI 3 apps instead of launching the .exe directly. Confidence: 0.9
+- When bugs remain unresolved, commit and push all work-in-progress with a detailed summary of known issues, root-cause hypotheses, and debugging artifacts. Don't wait for everything to be fixed. Confidence: 0.85
+- Prefer synchronous Win32 APIs (e.g. SetWindowPos) over async WinRT APIs (e.g. MoveAndResize) for window sizing operations to avoid race conditions with XAML composition. Confidence: 0.9
+- When a fix introduces a visual regression, immediately revert and try a fundamentally different approach rather than incrementally patching the broken one. Confidence: 0.85
+- When a framework fundamentally can't deliver a required capability (e.g. WinUI 3 can't do transparent overlay windows), be willing to switch frameworks rather than fighting limitations. Ask "what's the best framework for exact results?" Confidence: 0.85
+- When switching frameworks, remove the old one entirely — no fallbacks, no parallel codebases. Once the migration decision is made, go all-in. Confidence: 0.9
+- Before committing to a technology/framework choice, present alternatives comparatively (e.g. a table with clear criteria) and confirm the chosen option meets all requirements. User wants to evaluate options before deciding. Confidence: 0.85
+- After every major change, provide step-by-step testing instructions (numbered list of what to do and what to expect) so the user knows exactly what to verify. Confidence: 0.9
+- Every part of the app should produce diagnostic logging to a file — never gate logging behind environment variables in development builds. Confidence: 0.9
+- When UI rendering issues persist, investigate with research tools (web search, skill activation, framework documentation) rather than guessing with incremental code changes. Confidence: 0.9
+- Commit with all issues recorded when bugs remain unresolved — include root-cause hypotheses, debugging artifacts, and next-steps in the commit message. Confidence: 0.9

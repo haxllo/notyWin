@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git:*)",
+      "Shell(dotnet:*)",
+      "Shell(findstr:*)",
+      "Shell(Remove-Item:*)",
+      "Shell(type C:\\Users\\mshab\\AppData\\Local\\Noty\\startup.log 2>nul)",
+      "Shell(type C:\\Users\\mshab\\AppData\\Local\\Noty\\deck.log 2>nul)",
+      "Shell(powershell -Command \"Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\notes.db' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\note.key.dpapi' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\settings.json' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\startup.log' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\deck.log' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\crash.log' -ErrorAction SilentlyContinue; Write-Host 'Cleared.'\")",
+      "Shell(powershell -Command \"Get-ChildItem 'C:\\Users\\mshab\\AppData\\Local\\Noty' -Force -Recurse | Format-Table FullName, Length, LastWriteTime -AutoSize\")",
+      "Shell(powershell -Command \"Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\notes.db*' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\note.key*' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\settings.json' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\startup.log' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\deck.log' -ErrorAction SilentlyContinue; Write-Host 'Cleared all Noty data.'\")",
+      "Shell(powershell -Command \"Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\notes.db*' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\note.key*' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\settings.json' -ErrorAction SilentlyContinue; Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\*.log' -ErrorAction SilentlyContinue; Write-Host 'Cleared.'\")",
+      "Shell(taskkill /F /IM NotyWin.App.exe 2>nul; timeout /t 2 /nobreak >nul; cd C:\\Users\\mshab\\Projects\\noty\\windows && dotnet build NotyWin.slnx 2>&1 | findstr /I \"CS0108 WMC9999 succeeded failed error\")",
+      "Shell(winapp:*)",
+      "Shell(powershell -Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AllowDevelopmentWithoutDevLicense\")",
+      "Shell(winget:*)",
+      "powershell",
+      "Shell(tasklist:*)",
+      "Shell(powershell -Command \"Get-ChildItem 'C:\\Users\\mshab\\AppData\\Local\\Noty' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime -AutoSize\")",
+      "Shell(type C:\\Users\\mshab\\AppData\\Local\\Noty\\crash.log 2>nul)",
+      "Shell(powershell -Command \"Get-ChildItem 'C:\\Users\\mshab\\AppData\\Local\\Noty' -Force -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime -AutoSize\")",
+      "Shell(taskkill /F /IM NotyWin.App.exe 2>nul; timeout /t 2 /nobreak >nul)",
+      "Shell(powershell -Command \"Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\*' -Force -ErrorAction SilentlyContinue\")",
+      "Shell(start:*)",
+      "Shell(/t:*)",
+      "Shell(type:*)",
+      "Shell(taskkill /F /IM NotyWin.App.exe 2>nul)",
+      "Shell(powershell -Command \"Start-Process 'C:\\Users\\mshab\\Projects\\noty\\windows\\src\\NotyWin.App\\bin\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\NotyWin.App.exe' -PassThru | Select-Object Id\")",
+      "Shell(taskkill /F /IM NotyWin.App.exe 2>nul; cd C:\\Users\\mshab\\Projects\\noty\\windows && dotnet build NotyWin.slnx 2>&1 | findstr /I \"error succeeded\")",
+      "Shell(powershell -Command \"Test-Path 'C:\\Users\\mshab\\AppData\\Local\\Noty'; Get-ChildItem 'C:\\Users\\mshab\\AppData\\Local\\Noty' -Force -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime -AutoSize\")",
+      "Shell(.NotyWin.App.exe:*)",
+      "Shell(powershell -Command Remove-Item 'C:\\Users\\mshab\\AppData\\Local\\Noty\\*' -Force -ErrorAction SilentlyContinue)",
+      "Shell(powershell -Command \"Get-ChildItem 'C:\\Users\\mshab\\Projects\\noty\\windows\\src\\NotyWin.App\\obj\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\intermediatexaml' -Filter '*.g.cs' | Select-Object Name, Length, LastWriteTime | Sort-Object Name\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

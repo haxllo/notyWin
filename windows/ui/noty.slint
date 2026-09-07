@@ -1,0 +1,1098 @@
+import { LineEdit } from "std-widgets.slint";
+
+export struct NoteData {
+    id: string,
+    title: string,
+    tab-title: string,
+    body: string,
+    body-styled: styled-text,
+    paper: color,
+    dash: color,
+    ink: color,
+    pinned: bool,
+    done: int,
+    total: int,
+}
+
+component ScrollingTextInput inherits Flickable {
+    in-out property <string> text;
+    in property <color> color;
+    in property <length> font-size;
+    in property <string> font-family: "";
+    in property <int> selection-start: -1;
+    in property <int> selection-end: -1;
+    in property <int> focus-request: 0;
+    out property <bool> has-focus: input.has-focus;
+    out property <int> cursor-position: input.cursor-position_byte-offset;
+    callback edited(string);
+    callback accepted();
+    callback key-pressed(event: KeyEvent) -> EventResult;
+
+    viewport-width: root.width;
+    viewport-height: max(root.height, input.preferred-height);
+
+    input := TextInput {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: max(root.height, self.preferred-height);
+        text <=> root.text;
+        color: root.color;
+        font-size: root.font-size;
+        font-family: root.font-family;
+        wrap: TextWrap.word-wrap;
+        single-line: false;
+        page-height: root.height;
+        vertical-alignment: TextVerticalAlignment.top;
+
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(); }
+        key-pressed(event) => { root.key-pressed(event) }
+        cursor-position-changed(position) => {
+            if (position.y + root.viewport-y < 0px) {
+                root.viewport-y = min(0px, max(root.height - self.height, -position.y));
+            } else if (position.y + root.viewport-y > root.height - 20px) {
+                root.viewport-y = min(
+                    0px,
+                    max(root.height - self.height, root.height - position.y - 20px),
+                );
+            }
+        }
+    }
+
+    changed visible => {
+        if (self.visible) {
+            input.focus();
+        }
+    }
+
+    changed selection-start => {
+        if (self.selection-start >= 0) {
+            input.set-selection-offsets(
+                self.selection-start,
+                max(self.selection-start, self.selection-end),
+            );
+        }
+    }
+
+    changed selection-end => {
+        if (self.selection-start >= 0) {
+            input.set-selection-offsets(
+                self.selection-start,
+                max(self.selection-start, self.selection-end),
+            );
+        }
+    }
+
+    changed focus-request => {
+        if (self.visible) {
+            input.focus();
+        }
+    }
+
+    ContextMenuArea {
+        Menu {
+            MenuItem {
+                title: "Cut";
+                activated => { input.cut(); }
+            }
+            MenuItem {
+                title: "Copy";
+                activated => { input.copy(); }
+            }
+            MenuItem {
+                title: "Paste";
+                activated => { input.paste(); }
+            }
+            MenuItem {
+                title: "Select All";
+                activated => { input.select-all(); }
+            }
+        }
+    }
+}
+
+export component NotyWindow inherits Window {
+    no-frame: true;
+    forward-focus: keyboard-scope;
+    in property <string> deck-state: "rest";
+    in property <bool> left-edge: false;
+    in property <[NoteData]> notes;
+    in property <NoteData> expanded-note;
+    in property <string> view: "deck";
+    in property <bool> library-archive: false;
+    in property <string> library-query: "";
+    in property <string> selected-id: "";
+    in property <int> library-selection-index: 0;
+    in-out property <string> editor-body: "";
+    in-out property <int> editor-cursor-position: 0;
+    in-out property <bool> markdown-preview: true;
+    in-out property <string> hovered-note-id: "";
+    in-out property <int> hovered-note-index: -1;
+    in-out property <string> preview-note-id: "";
+    in-out property <int> preview-note-index: -1;
+    in-out property <bool> preview-card-hovered: false;
+    in-out property <bool> find-visible: false;
+    in-out property <string> find-query: "";
+    in property <int> find-match-count: 0;
+    in property <int> find-match-index: -1;
+    in property <int> find-selection-start: -1;
+    in property <int> find-selection-end: -1;
+    in property <string> save-status: "Saved";
+    in-out property <int> editor-focus-request: 0;
+    in-out property <string> capture-body: "";
+    in property <color> capture-paper: #fbcfa6;
+    in property <color> capture-dash: #e2762a;
+    in property <color> capture-ink: #422413;
+    in property <length> note-font-size: 14px;
+    in property <bool> markdown-styling: true;
+    in property <bool> pinned: false;
+    in property <int> hidden-count: 0;
+    in property <string> deck-style: "tabs";
+    in property <bool> deck-always-shown: false;
+    in property <bool> open-on-hover: false;
+    in property <bool> tab-preview: true;
+    in property <bool> fan-show-all: false;
+    in property <float> deck-scale: 1.0;
+    in property <bool> launch-at-login: false;
+    in property <bool> show-over-fullscreen: false;
+    in property <bool> pending-delete: false;
+    in property <string> pending-delete-title: "";
+    in property <bool> pill-hidden: false;
+    in property <string> display-id: "";
+    in property <string> display-target: "all";
+
+    callback deck-hovered(bool);
+    callback preview-changed(string);
+    callback hover-open-note(string);
+    callback display-changed();
+    callback escape-pressed();
+    callback back-to-deck();
+    callback undo-delete();
+    callback reveal-more-notes();
+    callback note-clicked(string);
+    callback note-context-action(string, string);
+    callback create-note();
+    callback close-note();
+    callback archive-note();
+    callback delete-note();
+    callback cycle-colour(int);
+    callback toggle-pin();
+    callback editor-changed(string);
+    callback capture-body-changed(string);
+    callback toggle-task(int);
+    callback task-link-clicked(string);
+    callback markdown-preview-changed(bool);
+    callback find-visibility-changed(bool);
+    callback find-query-changed(string);
+    callback find-next(bool);
+    callback restore-note();
+    callback open-library();
+    callback open-settings();
+    callback open-capture();
+    callback library-query-changed(string);
+    callback library-note-selected(string);
+    callback library-selection-move(int);
+    callback library-selection-command(string);
+    callback library-body-changed(string);
+    callback library-mode-changed(bool);
+    callback settings-changed(string, bool);
+    callback settings-scale-changed(float);
+    callback display-target-changed(string);
+    callback save-capture(string);
+    callback cancel-capture();
+
+    private property <int> pill-dash-count: notes.length > 0
+        ? notes.length + (hidden-count > 0 ? 1 : 0) : 1;
+    private property <length> pill-width: 12px * deck-scale;
+    private property <length> pill-dash-height: 14px * deck-scale;
+    private property <length> pill-gap: 5px * deck-scale;
+    private property <length> pill-padding: 7px * deck-scale;
+    private property <length> pill-height: pill-padding * 2
+        + pill-dash-count * pill-dash-height
+        + (pill-dash-count - 1) * pill-gap;
+    private property <length> tab-width: 30px * deck-scale;
+    private property <length> tab-pitch: 56px * deck-scale;
+    private property <length> control-size: 28px * deck-scale;
+    private property <length> fan-item-width: deck-style == "tabs" ? tab-width : 24px * deck-scale;
+    private property <length> fan-item-height: deck-style == "tabs" ? 106px * deck-scale : 24px * deck-scale;
+    private property <length> fan-item-pitch: deck-style == "tabs" ? tab-pitch : 36px * deck-scale;
+    private property <length> fan-top: 24px * deck-scale;
+    private property <length> fan-edge-margin: left-edge ? 12px : 0px;
+    private property <length> fan-item-x: left-edge
+        ? fan-edge-margin : root.width - fan-item-width - fan-edge-margin;
+    private property <length> fan-more-y: fan-top + notes.length * fan-item-pitch + 18px * deck-scale;
+    private property <length> fan-more-height: 34px * deck-scale;
+    private property <length> fan-content-bottom: !fan-show-all && hidden-count > 0
+        ? fan-more-y + fan-more-height + 12px * deck-scale
+        : fan-top + notes.length * fan-item-pitch + fan-item-height;
+    private property <length> fan-scroll-height: max(1px, root.height - control-size - 74px);
+    private property <length> preview-width: 210px * deck-scale;
+    private property <length> preview-height: 96px * deck-scale;
+    private property <length> preview-gap: 10px * deck-scale;
+    private property <length> preview-x: left-edge
+        ? fan-item-x + fan-item-width + preview-gap
+        : fan-item-x - preview-width - preview-gap;
+    private property <length> preview-y: min(
+        max(10px, fan-top + max(0, preview-note-index) * fan-item-pitch),
+        max(10px, root.height - preview-height - 10px)
+    );
+    private property <bool> library-list-focused: false;
+
+    changed markdown-preview => {
+        root.markdown-preview-changed(self.markdown-preview);
+    }
+
+    background: transparent;
+
+    hover-open-timer := Timer {
+        interval: 450ms;
+        running: root.open-on-hover && root.view == "deck"
+            && root.deck-state == "fan" && root.hovered-note-id != "";
+        triggered => {
+            if (root.hovered-note-id != "") {
+                root.hover-open-note(root.hovered-note-id);
+            }
+        }
+    }
+
+    hover-preview-hide-timer := Timer {
+        interval: 150ms;
+        running: root.preview-note-id != "" && !root.preview-card-hovered
+            && root.hovered-note-id == "";
+        triggered => {
+            if (!root.preview-card-hovered && root.hovered-note-id == "") {
+                root.preview-note-id = "";
+                root.preview-note-index = -1;
+            }
+        }
+    }
+
+    changed preview-note-id => {
+        root.preview-changed(self.preview-note-id);
+    }
+
+    changed deck-state => {
+        root.hovered-note-id = "";
+        root.hovered-note-index = -1;
+        root.preview-note-id = "";
+        root.preview-note-index = -1;
+        root.preview-card-hovered = false;
+    }
+
+    changed view => {
+        if (root.view != "deck") {
+            root.hovered-note-id = "";
+            root.hovered-note-index = -1;
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+            root.preview-card-hovered = false;
+        }
+    }
+
+    changed open-on-hover => {
+        if (self.open-on-hover) {
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+        }
+    }
+
+    changed tab-preview => {
+        if (!self.tab-preview) {
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+        }
+    }
+
+    keyboard-scope := FocusScope {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        focus-on-click: true;
+
+        capture-key-pressed(event) => {
+            if (event.text == Key.Escape && root.view == "deck" && root.find-visible) {
+                root.escape-pressed();
+                root.editor-focus-request = root.editor-focus-request + 1;
+                return accept;
+            }
+            if (event.text == Key.Escape) {
+                root.escape-pressed();
+                return accept;
+            }
+            if (root.view == "capture" && event.text == Key.Return && !event.modifiers.shift) {
+                root.save-capture(root.capture-body);
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.UpArrow) {
+                root.library-selection-move(-1);
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.DownArrow) {
+                root.library-selection-move(1);
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.Home) {
+                root.library-selection-command("home");
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.End) {
+                root.library-selection-command("end");
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.PageUp) {
+                root.library-selection-command("page-up");
+                return accept;
+            }
+            if (root.view == "library" && root.library-list-focused
+                    && event.text == Key.PageDown) {
+                root.library-selection-command("page-down");
+                return accept;
+            }
+            if (root.view == "deck" && root.deck-state == "expanded"
+                    && event.modifiers.control && event.text == "f") {
+                root.find-visibility-changed(true);
+                return accept;
+            }
+            if (root.view == "deck" && root.deck-state == "expanded"
+                    && event.modifiers.control && event.text == "t") {
+                root.toggle-task(root.editor-cursor-position);
+                return accept;
+            }
+            reject
+        }
+
+    if view == "deck": Rectangle {
+        background: transparent;
+        clip: true;
+
+        deck-hover-surface := TouchArea {
+            width: root.width;
+            height: root.height;
+            enabled: root.view == "deck";
+            changed has-hover => { root.deck-hovered(self.has-hover); }
+
+        if deck-state == "rest": Rectangle {
+            x: left-edge ? 0px : root.width - pill-width;
+            y: (root.height - pill-height) / 2;
+            width: pill-width;
+            height: pill-height;
+            border-radius: 9px;
+            background: #2b1e22;
+            opacity: pill-hidden ? 0 : 0.94;
+
+            for note[index] in notes : Rectangle {
+                x: 2px * deck-scale;
+                y: pill-padding + index * (pill-dash-height + pill-gap);
+                width: 8px * deck-scale;
+                height: pill-dash-height;
+                border-radius: 4px * deck-scale;
+                background: note.dash;
+            }
+            if notes.length == 0: Rectangle {
+                x: 2px * deck-scale; y: pill-padding;
+                width: 8px * deck-scale; height: pill-dash-height;
+                border-radius: 4px * deck-scale; background: #a27679;
+            }
+            if hidden-count > 0: Rectangle {
+                x: 2px * deck-scale;
+                y: pill-padding + 14 * (pill-dash-height + pill-gap);
+                width: 8px * deck-scale;
+                height: pill-dash-height;
+                border-radius: 4px * deck-scale;
+                background: #a27679;
+            }
+            TouchArea {
+                clicked => { root.deck-hovered(true); }
+            }
+        }
+
+        if deck-state == "fan": Rectangle {
+            width: root.width;
+            height: root.height;
+            background: transparent;
+            fan-scroll := Flickable {
+                x: 0px;
+                y: 0px;
+                width: root.width;
+                height: fan-scroll-height;
+                viewport-width: self.width;
+                viewport-height: max(self.height, fan-content-bottom);
+
+                Rectangle {
+                    width: root.width;
+                    height: fan-content-bottom;
+
+                    for note[index] in notes : Rectangle {
+                        x: fan-item-x;
+                        y: fan-top + index * fan-item-pitch;
+                        width: fan-item-width;
+                        height: fan-item-height;
+                        border-top-left-radius: deck-style == "tabs" ? 12px : 8px;
+                        border-bottom-left-radius: deck-style == "tabs" ? 12px : 8px;
+                        border-top-right-radius: 0px;
+                        border-bottom-right-radius: 0px;
+                        background: note.paper;
+                        opacity: 1.0;
+                        // Pin the outward top corner so rotation cannot leave a screen-edge gap.
+                        transform-origin: {
+                            x: !left-edge && deck-style == "tabs" ? fan-item-width : fan-item-width / 2,
+                            y: !left-edge && deck-style == "tabs" ? 0px : fan-item-height / 2
+                        };
+                        transform-rotation: deck-style == "tabs" ? (left-edge ? 3deg : -3deg) : 0deg;
+                        animate y { duration: 220ms; delay: index * 42ms; easing: ease-out; }
+
+                        if note.pinned: Rectangle {
+                            x: left-edge ? 4px : 21px;
+                            y: 8px;
+                            width: 5px;
+                            height: 5px;
+                            border-radius: 3px;
+                            background: note.dash;
+                        }
+                        if deck-style == "tabs": Text {
+                            x: 5px;
+                            y: 10px;
+                            width: 96px;
+                            height: 86px;
+                            text: note.tab-title;
+                            color: note.ink;
+                            font-size: 9px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            transform-rotation: left-edge ? 90deg : -90deg;
+                            overflow: clip;
+                        }
+                        if deck-style == "chips": Text {
+                            x: 3px;
+                            y: 2px;
+                            width: 18px;
+                            height: 20px;
+                            text: note.title;
+                            color: note.ink;
+                            font-size: 7px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            overflow: clip;
+                        }
+                        TouchArea {
+                            x: deck-style == "tabs" ? -3px : 0px;
+                            y: deck-style == "tabs" ? -1px : 0px;
+                            width: deck-style == "tabs" ? parent.width + 6px : parent.width;
+                            height: deck-style == "tabs" ? parent.height + 2px : parent.height;
+                            changed has-hover => {
+                                if (self.has-hover) {
+                                    root.hovered-note-id = note.id;
+                                    root.hovered-note-index = index;
+                                    if (root.tab-preview && !root.open-on-hover
+                                            && root.view == "deck" && root.deck-state == "fan") {
+                                        root.preview-note-id = note.id;
+                                        root.preview-note-index = index;
+                                    }
+                                } else if (root.hovered-note-id == note.id) {
+                                    root.hovered-note-id = "";
+                                    root.hovered-note-index = -1;
+                                }
+                            }
+                            clicked => { root.note-clicked(note.id); }
+                        }
+                        ContextMenuArea {
+                            width: parent.width;
+                            height: parent.height;
+                            Menu {
+                                MenuItem {
+                                    title: note.pinned ? "Unpin" : "Pin";
+                                    activated => { root.note-context-action(note.id, "pin"); }
+                                }
+                                MenuItem {
+                                    title: "Archive";
+                                    activated => { root.note-context-action(note.id, "archive"); }
+                                }
+                                Menu {
+                                    title: "Colour";
+                                    MenuItem { title: "Gold"; activated => { root.note-context-action(note.id, "colour-0"); } }
+                                    MenuItem { title: "Orange"; activated => { root.note-context-action(note.id, "colour-1"); } }
+                                    MenuItem { title: "Pink"; activated => { root.note-context-action(note.id, "colour-2"); } }
+                                    MenuItem { title: "Purple"; activated => { root.note-context-action(note.id, "colour-3"); } }
+                                    MenuItem { title: "Blue"; activated => { root.note-context-action(note.id, "colour-4"); } }
+                                    MenuItem { title: "Green"; activated => { root.note-context-action(note.id, "colour-5"); } }
+                                    MenuItem { title: "Sand"; activated => { root.note-context-action(note.id, "colour-6"); } }
+                                    MenuItem { title: "Slate"; activated => { root.note-context-action(note.id, "colour-7"); } }
+                                }
+                                MenuItem {
+                                    title: "Delete";
+                                    activated => { root.note-context-action(note.id, "delete"); }
+                                }
+                            }
+                        }
+                    }
+
+                    if hidden-count > 0: Rectangle {
+                        x: fan-item-x;
+                        y: fan-more-y;
+                        width: fan-item-width;
+                        height: fan-more-height;
+                        border-radius: 10px;
+                        background: #a86f66;
+                        opacity: 0.9;
+                        Text {
+                            width: 100%; height: 100%;
+                            text: "+" + hidden-count;
+                            color: #fff2e9;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        TouchArea { clicked => { root.reveal-more-notes(); } }
+                    }
+                }
+            }
+
+            for note[index] in notes : Rectangle {
+                visible: note.id == preview-note-id;
+                x: preview-x;
+                y: preview-y;
+                width: preview-width;
+                height: preview-height;
+                border-top-left-radius: 8px;
+                border-bottom-left-radius: 8px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                background: note.paper;
+                border-width: 1px;
+                border-color: note.ink.with-alpha(0.12);
+
+                Rectangle {
+                    x: 10px; y: 10px; width: 7px; height: 7px;
+                    border-radius: 4px; background: note.dash;
+                }
+                Text {
+                    x: 24px; y: 7px; width: preview-width - 58px; height: 20px;
+                    text: note.title; color: note.ink; font-size: 11px;
+                    font-weight: 700; overflow: clip;
+                }
+                if note.total > 0: Text {
+                    x: preview-width - 50px; y: 8px; width: 40px; height: 18px;
+                    text: note.done + "/" + note.total; color: note.ink.with-alpha(0.65);
+                    font-size: 9px; horizontal-alignment: right;
+                }
+                if note.pinned: Text {
+                    x: preview-width - 22px; y: 28px; width: 12px; height: 14px;
+                    text: "●"; color: note.ink.with-alpha(0.65); font-size: 9px;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    x: 10px; y: 31px; width: preview-width - 20px; height: preview-height - 40px;
+                    text: note.body; color: note.ink.with-alpha(0.82); font-size: 10px;
+                    wrap: word-wrap; overflow: clip;
+                }
+                TouchArea {
+                    changed has-hover => { root.preview-card-hovered = self.has-hover; }
+                    clicked => { root.note-clicked(note.id); }
+                }
+            }
+
+            Rectangle {
+                x: left-edge ? fan-edge-margin : root.width - control-size - fan-edge-margin;
+                y: root.height - control-size - 22px;
+                width: control-size;
+                height: control-size;
+                border-radius: control-size / 2;
+                background: #86534a;
+                Text {
+                    width: 100%; height: 100%; text: "+";
+                    color: #ffece0; font-size: 23px;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.create-note(); } }
+            }
+            Rectangle {
+                x: left-edge ? fan-edge-margin : root.width - control-size - fan-edge-margin;
+                y: root.height - control-size - 62px;
+                width: control-size;
+                height: control-size;
+                border-radius: control-size / 2;
+                background: #8f5e54;
+                Text {
+                    width: 100%; height: 100%; text: "⚙";
+                    color: #ffece0; font-size: 16px;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.open-settings(); } }
+            }
+        }
+
+        if deck-state == "expanded": Rectangle {
+            x: 0px; y: 0px; width: root.width; height: root.height;
+            background: transparent;
+
+            Rectangle {
+                x: left-edge ? tab-width : 0px; y: 0px;
+                width: root.width - tab-width; height: root.height;
+                border-top-left-radius: 14px;
+                border-bottom-left-radius: 14px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                background: expanded-note.paper;
+                border-width: 1px;
+                border-color: expanded-note.ink.with-alpha(0.12);
+                clip: true;
+
+                Rectangle {
+                    x: 0px; y: 0px; width: parent.width; height: 62px;
+                    background: expanded-note.paper.with-alpha(0.92);
+                    Text {
+                        x: 22px; y: 11px; width: parent.width - 150px; height: 30px;
+                        text: expanded-note.title; color: expanded-note.ink;
+                        font-size: 19px; font-weight: 700; overflow: clip;
+                    }
+                    Text {
+                        x: parent.width - 185px; y: 16px; width: 105px; height: 20px;
+                        text: save-status; color: save-status == "Couldn’t save"
+                            ? #bd4b42 : expanded-note.ink.with-alpha(0.50);
+                        font-size: 11px; horizontal-alignment: right;
+                    }
+                    if markdown-styling: Text {
+                        x: max(72px, parent.width - 270px); y: 16px; width: 58px; height: 20px;
+                        text: markdown-preview ? "Edit" : "Preview";
+                        color: expanded-note.dash; font-size: 11px; font-weight: 600;
+                        horizontal-alignment: center;
+                        TouchArea { clicked => { root.markdown-preview = !markdown-preview; } }
+                    }
+                    Text {
+                        x: parent.width - 66px; y: 11px; width: 26px; height: 26px;
+                        text: pinned ? "●" : "○"; color: expanded-note.ink.with-alpha(0.62);
+                        font-size: 18px; horizontal-alignment: center;
+                        TouchArea { clicked => { root.toggle-pin(); } }
+                    }
+                    Text {
+                        x: parent.width - 38px; y: 12px; width: 26px; height: 26px;
+                        text: "⌕"; color: expanded-note.ink.with-alpha(0.62);
+                        font-size: 23px; horizontal-alignment: center;
+                        TouchArea { clicked => { root.find-visibility-changed(!root.find-visible); } }
+                    }
+                }
+                if root.find-visible: Rectangle {
+                    x: 0px; y: 62px; width: parent.width; height: 30px;
+                    background: expanded-note.dash.with-alpha(0.10);
+                    Text {
+                        x: 16px; y: 0px; width: 18px; height: 30px;
+                        text: "⌕"; color: expanded-note.ink.with-alpha(0.48);
+                        font-size: 15px; horizontal-alignment: center;
+                    }
+                    find-input := LineEdit {
+                        x: 38px; y: 3px; width: parent.width - 148px; height: 24px;
+                        text: root.find-query; placeholder-text: "Find in note";
+                        changed visible => { if (self.visible) { self.focus(); } }
+                        edited => { root.find-query-changed(self.text); }
+                        accepted => { root.find-next(true); }
+                    }
+                    Text {
+                        x: parent.width - 106px; y: 0px; width: 42px; height: 30px;
+                        text: root.find-match-count == 0
+                            ? "—"
+                            : (root.find-match-index + 1) + " / " + root.find-match-count;
+                        color: expanded-note.ink.with-alpha(0.52); font-size: 10px;
+                        horizontal-alignment: right; vertical-alignment: center;
+                    }
+                    Text {
+                        x: parent.width - 60px; y: 0px; width: 20px; height: 30px;
+                        text: "‹"; color: expanded-note.ink.with-alpha(0.58);
+                        font-size: 18px; horizontal-alignment: center; vertical-alignment: center;
+                        TouchArea { clicked => { root.find-next(false); } }
+                    }
+                    Text {
+                        x: parent.width - 36px; y: 0px; width: 20px; height: 30px;
+                        text: "›"; color: expanded-note.ink.with-alpha(0.58);
+                        font-size: 18px; horizontal-alignment: center; vertical-alignment: center;
+                        TouchArea { clicked => { root.find-next(true); } }
+                    }
+                }
+                editor-input := ScrollingTextInput {
+                    x: 30px; y: 73px + (root.find-visible ? 30px : 0px);
+                    width: parent.width - 60px;
+                    height: parent.height - 145px - (root.find-visible ? 30px : 0px);
+                    visible: !root.markdown-styling || !root.markdown-preview;
+                    text: root.editor-body; color: expanded-note.ink;
+                    font-size: root.note-font-size; font-family: "Segoe Print";
+                    selection-start: root.find-selection-start;
+                    selection-end: root.find-selection-end;
+                    focus-request: root.editor-focus-request;
+                    edited => {
+                        root.editor-body = self.text;
+                        root.editor-changed(self.text);
+                    }
+                    changed cursor-position => {
+                        root.editor-cursor-position = self.cursor-position;
+                    }
+                }
+                if root.markdown-styling && root.markdown-preview: Rectangle {
+                    x: 30px; y: 73px + (root.find-visible ? 30px : 0px);
+                    width: parent.width - 60px;
+                    height: parent.height - 145px - (root.find-visible ? 30px : 0px);
+                    clip: true;
+                    Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        viewport-width: self.width;
+                        viewport-height: max(self.height, preview-text.preferred-height);
+                        preview-text := StyledText {
+                            x: 0px; y: 0px;
+                            width: parent.width;
+                            height: max(parent.height, self.preferred-height);
+                            text: expanded-note.body-styled;
+                            default-color: expanded-note.ink;
+                            default-font-size: root.note-font-size;
+                            default-font-family: "Segoe Print";
+                            link-color: expanded-note.dash;
+                            link-clicked(link) => { root.task-link-clicked(link); }
+                        }
+                    }
+                }
+                Rectangle {
+                    x: 30px; y: parent.height - 62px;
+                    width: parent.width - 60px; height: 42px; background: transparent;
+                    for colour[index] in [#e0ad08, #e2762a, #dc4570, #7c4dee, #2280d6, #0e9b6e, #a37b3c, #4e6579] : Rectangle {
+                        x: index * 32px; y: 10px; width: 18px; height: 18px;
+                        border-radius: 9px; background: colour;
+                        TouchArea { clicked => { root.cycle-colour(index); } }
+                    }
+                    Rectangle {
+                        x: parent.width - 244px; y: 3px; width: 76px; height: 34px;
+                        border-radius: 10px; background: expanded-note.ink.with-alpha(0.08);
+                        Text { width: 100%; height: 100%; text: "Archive"; color: expanded-note.ink;
+                               font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.archive-note(); } }
+                    }
+                    Rectangle {
+                        x: parent.width - 330px; y: 3px; width: 76px; height: 34px;
+                        border-radius: 10px; background: expanded-note.ink.with-alpha(0.08);
+                        opacity: root.markdown-preview ? 0.45 : 1.0;
+                        Text { width: 100%; height: 100%; text: "Task"; color: expanded-note.ink;
+                               font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea {
+                            enabled: !root.markdown-preview;
+                            clicked => { root.toggle-task(editor-input.cursor-position); }
+                        }
+                    }
+                    Rectangle {
+                        x: parent.width - 158px; y: 3px; width: 70px; height: 34px;
+                        border-radius: 10px; background: expanded-note.ink.with-alpha(0.08);
+                        Text { width: 100%; height: 100%; text: "Delete"; color: expanded-note.ink;
+                               font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.delete-note(); } }
+                    }
+                    Rectangle {
+                        x: parent.width - 78px; y: 3px; width: 70px; height: 34px;
+                        border-radius: 10px; background: expanded-note.ink.with-alpha(0.08);
+                        Text { width: 100%; height: 100%; text: "Close"; color: expanded-note.ink;
+                               font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.close-note(); } }
+                    }
+                }
+            }
+            Rectangle {
+                x: left-edge ? 0px : root.width - tab-width;
+                y: 0px; width: tab-width; height: parent.height;
+                background: expanded-note.paper.with-alpha(0.85);
+                border-color: expanded-note.ink.with-alpha(0.18); border-width: 1px;
+                Text {
+                    width: parent.height; height: parent.width;
+                    x: 0px; y: parent.height; text: expanded-note.tab-title;
+                    color: expanded-note.ink; font-size: 10px; font-weight: 600;
+                    horizontal-alignment: center;
+                    transform-rotation: left-edge ? -90deg : 90deg;
+                }
+            }
+        }
+    }
+
+    }
+
+    if view == "library": Rectangle {
+        background: #f9f1ed;
+        border-radius: 14px;
+        Rectangle {
+            x: 0px; y: 0px; width: 280px; height: parent.height;
+            background: #f2e4de;
+            Text {
+                x: 22px; y: 16px; text: "← Deck"; color: #805e5b; font-size: 11px;
+                TouchArea { clicked => { root.back-to-deck(); } }
+            }
+            Text { x: 22px; y: 38px; text: "All Notes"; color: #38272a; font-size: 21px; font-weight: 700; }
+            library-search := LineEdit {
+                x: 18px; y: 74px; width: 244px; height: 34px;
+                text: root.library-query; placeholder-text: "Search notes";
+                changed visible => {
+                    if (self.visible) { self.focus(); }
+                }
+                edited => { root.library-query-changed(self.text); }
+            }
+            Rectangle {
+                x: 18px; y: 121px; width: 244px; height: 31px; background: transparent;
+                Text { x: 0px; width: 120px; height: 31px; text: "Notes"; color: #38272a;
+                       font-size: 12px; horizontal-alignment: center; vertical-alignment: center;
+                       TouchArea { clicked => { root.library-mode-changed(false); } } }
+                Text { x: 122px; width: 120px; height: 31px; text: "Archive"; color: #805e5b;
+                       font-size: 12px; horizontal-alignment: center; vertical-alignment: center;
+                       TouchArea { clicked => { root.library-mode-changed(true); } } }
+            }
+            Rectangle {
+                x: 0px; y: 158px; width: 280px; height: parent.height - 158px;
+                clip: true;
+                library-list-focus := FocusScope {
+                    width: parent.width;
+                    height: parent.height;
+                    enabled: root.view == "library";
+                    focus-on-click: true;
+                    changed has-focus => { root.library-list-focused = self.has-focus; }
+                    Flickable {
+                        width: parent.width; height: parent.height;
+                        viewport-width: 280px;
+                        viewport-height: notes.length * 52px + 8px;
+                        viewport-y: -max(
+                            0px,
+                            min(
+                                max(0px, notes.length * 52px + 8px - self.height),
+                                library-selection-index * 52px + 46px - self.height,
+                            ),
+                        );
+                        for note[index] in notes : Rectangle {
+                            x: 16px; y: 8px + index * 52px; width: 248px; height: 46px;
+                            background: note.id == root.selected-id ? note.dash.with-alpha(0.16) : transparent;
+                            Rectangle { x: 8px; y: 9px; width: 4px; height: 28px; border-radius: 2px; background: note.dash; }
+                            Text { x: 24px; y: 7px; width: 214px; height: 18px; text: note.title;
+                                   color: #38272a; font-size: 12px; font-weight: 600; overflow: clip; }
+                            Text { x: 24px; y: 25px; width: 214px; height: 15px;
+                                   text: note.total > 0 ? note.done + "/" + note.total : "";
+                                   color: #805e5b; font-size: 10px; }
+                            TouchArea {
+                                clicked => {
+                                    library-list-focus.focus();
+                                    root.library-note-selected(note.id);
+                                }
+                            }
+                            ContextMenuArea {
+                                width: parent.width;
+                                height: parent.height;
+                                Menu {
+                                    MenuItem {
+                                        title: note.pinned ? "Unpin" : "Pin";
+                                        activated => { root.note-context-action(note.id, "pin"); }
+                                    }
+                                    if library-archive: MenuItem {
+                                        title: "Restore";
+                                        activated => { root.note-context-action(note.id, "restore"); }
+                                    }
+                                    if !library-archive: MenuItem {
+                                        title: "Archive";
+                                        activated => { root.note-context-action(note.id, "archive"); }
+                                    }
+                                    MenuItem {
+                                        title: "Delete";
+                                        activated => { root.note-context-action(note.id, "delete"); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            x: 280px; y: 0px; width: parent.width - 280px; height: parent.height;
+            background: #fff9f5;
+            if library-archive && selected-id != "": Rectangle {
+                x: parent.width - 122px; y: 20px; width: 92px; height: 30px;
+                border-radius: 9px; background: expanded-note.ink.with-alpha(0.08);
+                Text { width: 100%; height: 100%; text: "Restore"; color: expanded-note.ink;
+                       font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.restore-note(); } }
+            }
+            if selected-id != "": Rectangle {
+                Text {
+                    x: 34px; y: 26px;
+                    width: parent.width - (library-archive ? 264px : 164px);
+                    height: 30px;
+                       text: expanded-note.title; color: expanded-note.ink; font-size: 20px; font-weight: 700; }
+                if markdown-styling: Text {
+                    x: parent.width - (library-archive ? 214px : 120px); y: 28px; width: 82px; height: 24px;
+                    text: markdown-preview ? "Edit" : "Preview";
+                    color: expanded-note.dash; font-size: 11px; font-weight: 600;
+                    horizontal-alignment: center;
+                    TouchArea { clicked => { root.markdown-preview = !markdown-preview; } }
+                }
+                ScrollingTextInput {
+                    visible: !root.markdown-styling || !root.markdown-preview;
+                    x: 34px; y: 78px; width: parent.width - 68px; height: parent.height - 112px;
+                    text: root.editor-body; color: expanded-note.ink; font-size: root.note-font-size;
+                    edited => {
+                        root.editor-body = self.text;
+                        root.library-body-changed(self.text);
+                    }
+                }
+                if root.markdown-styling && root.markdown-preview: Rectangle {
+                    x: 34px; y: 78px; width: parent.width - 68px; height: parent.height - 112px;
+                    clip: true;
+                    Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        viewport-width: self.width;
+                        viewport-height: max(self.height, library-preview-text.preferred-height);
+                        library-preview-text := StyledText {
+                            x: 0px; y: 0px;
+                            width: parent.width;
+                            height: max(parent.height, self.preferred-height);
+                            text: expanded-note.body-styled;
+                            default-color: expanded-note.ink;
+                            default-font-size: root.note-font-size;
+                            default-font-family: "Segoe Print";
+                            link-color: expanded-note.dash;
+                            link-clicked(link) => { root.task-link-clicked(link); }
+                        }
+                    }
+                }
+            }
+            if selected-id == "": Text {
+                width: parent.width; height: parent.height; text: "Select a note";
+                color: #805e5b; font-size: 18px; horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+    }
+
+    if view == "settings": Rectangle {
+        background: #fbf3ef; border-radius: 14px;
+        Text {
+            x: 30px; y: 16px; text: "← Deck"; color: #805e5b; font-size: 11px;
+            TouchArea { clicked => { root.back-to-deck(); } }
+        }
+        Text { x: 30px; y: 38px; text: "Settings"; color: #38272a; font-size: 24px; font-weight: 700; }
+        Text { x: 30px; y: 78px; text: "Deck"; color: #805e5b; font-size: 13px; font-weight: 700; }
+        Text { x: 30px; y: 112px; text: "Labelled tabs"; color: #38272a; font-size: 14px; }
+        Rectangle {
+            x: 500px; y: 104px; width: 56px; height: 28px; border-radius: 14px;
+            background: deck-style == "tabs" ? #a86f66 : #ead8d0;
+            Text { width: 100%; height: 100%; text: deck-style == "tabs" ? "Tabs" : "Chips";
+                   color: deck-style == "tabs" ? #fff4ee : #805e5b; font-size: 10px;
+                   horizontal-alignment: center; vertical-alignment: center; }
+            TouchArea { clicked => { root.settings-changed("deck-style", deck-style != "tabs"); } }
+        }
+        Text { x: 30px; y: 160px; text: "Deck size"; color: #38272a; font-size: 14px; }
+        Text {
+            x: 500px; y: 160px;
+            text: deck-scale < 0.775 ? "70%" : deck-scale < 0.925 ? "85%" : deck-scale < 1.125 ? "100%"
+                : deck-scale < 1.375 ? "125%" : deck-scale < 1.65 ? "150%" : "180%";
+            color: #805e5b; font-size: 14px;
+        }
+        Rectangle { x: 30px; y: 196px; width: 526px; height: 5px; border-radius: 3px; background: #ead8d0;
+            Rectangle { x: 0px; y: 0px; width: ((deck-scale - 0.7) / 1.1) * 526px; height: 5px; border-radius: 3px; background: #a86f66; }
+            TouchArea {
+                clicked => {
+                    root.settings-scale-changed(
+                        deck-scale < 0.775 ? 0.85
+                        : deck-scale < 0.925 ? 1.0
+                        : deck-scale < 1.125 ? 1.25
+                        : deck-scale < 1.375 ? 1.5
+                        : deck-scale < 1.65 ? 1.8 : 0.7
+                    );
+                }
+            }
+        }
+        Text { x: 30px; y: 246px; text: "Keep deck open"; color: #38272a; font-size: 14px; }
+        Rectangle {
+            x: 500px; y: 238px; width: 56px; height: 28px; border-radius: 14px;
+            background: deck-always-shown ? #a86f66 : #ead8d0;
+            Text { width: 100%; height: 100%; text: deck-always-shown ? "On" : "Off";
+                   color: deck-always-shown ? #fff4ee : #805e5b; font-size: 10px;
+                   horizontal-alignment: center; vertical-alignment: center; }
+            TouchArea { clicked => { root.settings-changed("deck-always-shown", !deck-always-shown); } }
+        }
+        Text { x: 30px; y: 300px; text: "Open note on hover"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 300px; text: open-on-hover ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 284px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("open-on-hover", !open-on-hover); } }
+        Text { x: 30px; y: 340px; text: "Preview note on hover"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 340px; text: tab-preview ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 324px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("tab-preview", !tab-preview); } }
+        Text { x: 30px; y: 380px; text: "Markdown styling"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 380px; text: markdown-styling ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 364px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("markdown-styling", !markdown-styling); } }
+        Text { x: 30px; y: 420px; text: "Launch at login"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 420px; text: launch-at-login ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 404px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("launch-at-login", !launch-at-login); } }
+        Text { x: 30px; y: 460px; text: "Edge side"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 460px; text: left-edge ? "Left" : "Right"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 444px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("left-edge", !left-edge); } }
+        Text { x: 30px; y: 500px; text: "Hide edge pill"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 500px; text: pill-hidden ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 484px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("pill-hidden", !pill-hidden); } }
+        Text { x: 30px; y: 540px; text: "Show over fullscreen"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 540px; text: show-over-fullscreen ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 524px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("show-over-fullscreen", !show-over-fullscreen); } }
+        Text { x: 30px; y: 580px; text: "Displays"; color: #38272a; font-size: 14px; }
+        Text {
+            x: 430px; y: 580px; width: 126px; text: display-target == "main" ? "Main display" : display-target == "all" ? "All displays" : display-target;
+            color: #805e5b; font-size: 12px; horizontal-alignment: right;
+        }
+        TouchArea {
+            x: 24px; y: 564px; width: 540px; height: 34px;
+            clicked => {
+                root.display-target-changed(display-target == "all" ? "main" : "all");
+            }
+        }
+        Text { x: 30px; y: parent.height - 18px; text: "Changes apply immediately"; color: #805e5b; font-size: 11px; }
+    }
+
+    if view == "capture": Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        border-radius: 12px; background: root.capture-paper;
+        border-width: 1px; border-color: root.capture-ink.with-alpha(0.14);
+        Rectangle {
+            x: 16px; y: 16px; width: 8px; height: 8px;
+            border-radius: 4px; background: root.capture-dash;
+        }
+        Text { x: 30px; y: 12px; text: "Quick capture"; color: root.capture-ink.with-alpha(0.62); font-size: 11px; font-weight: 600; }
+        Text { x: 16px; y: parent.height - 25px; text: "Enter to save · Esc to cancel"; color: root.capture-ink.with-alpha(0.55); font-size: 10px; }
+        Rectangle {
+            x: parent.width - 34px; y: 8px; width: 20px; height: 20px; border-radius: 10px;
+            background: root.capture-ink.with-alpha(0.08);
+            Text { width: 100%; height: 100%; text: "×"; color: root.capture-ink; font-size: 14px;
+                   horizontal-alignment: center; vertical-alignment: center; }
+            TouchArea { clicked => { root.cancel-capture(); } }
+        }
+    }
+
+    capture-input := ScrollingTextInput {
+        visible: root.view == "capture";
+        x: 16px; y: 38px; width: root.width - 32px; height: root.height - 70px;
+        text: root.capture-body; color: root.capture-ink; font-size: 14px; font-family: "Segoe Print";
+        edited => {
+            root.capture-body = self.text;
+            root.capture-body-changed(self.text);
+        }
+    }
+
+    if pending-delete: Rectangle {
+        x: (root.width - 290px) / 2; y: root.height - 52px; width: 290px; height: 36px;
+        border-radius: 10px; background: #38272a; opacity: 0.96;
+        Text { x: 12px; y: 0px; width: 196px; height: 36px; text: "Deleted " + pending-delete-title;
+               color: #fff9f5; font-size: 11px; vertical-alignment: center; overflow: clip; }
+        Text { x: 220px; y: 0px; width: 58px; height: 36px; text: "Undo"; color: #fbcfa6;
+               font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+        TouchArea { x: 212px; y: 0px; width: 72px; height: 36px; clicked => { root.undo-delete(); } }
+    }
+    }
+}
