@@ -45,6 +45,7 @@ pub struct AppState {
     pub expanded_id: Option<String>,
     pub selected_id: Option<String>,
     pub markdown_preview: bool,
+    pub save_state: SaveState,
     pub find_visible: bool,
     pub find_query: String,
     pub find_match_count: usize,
@@ -74,6 +75,23 @@ pub enum View {
     Library,
     Settings,
     Capture,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SaveState {
+    Saved,
+    Saving,
+    Error,
+}
+
+impl SaveState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Saved => "Saved",
+            Self::Saving => "Saving…",
+            Self::Error => "Couldn’t save",
+        }
+    }
 }
 
 impl View {
@@ -121,6 +139,7 @@ impl AppState {
             expanded_id: None,
             selected_id: None,
             markdown_preview,
+            save_state: SaveState::Saved,
             find_visible: false,
             find_query: String::new(),
             find_match_count: 0,
@@ -263,8 +282,10 @@ impl AppState {
     fn save_note(&mut self, note: &Note) -> bool {
         if let Err(error) = self.store.save_note(note) {
             eprintln!("Noty: could not save note {}: {error}", note.id);
+            self.save_state = SaveState::Error;
             return false;
         }
+        self.save_state = SaveState::Saved;
         true
     }
 
@@ -1508,6 +1529,7 @@ impl Controller {
             find_selection_start,
             find_selection_end,
             selected,
+            save_status,
             pending_delete,
             pending_delete_title,
             activation_requested,
@@ -1549,6 +1571,7 @@ impl Controller {
                 state.find_selection_start,
                 state.find_selection_end,
                 state.selected_note().cloned(),
+                state.save_state.label().to_owned(),
                 !state.pending_deletes.is_empty(),
                 state
                     .pending_deletes
@@ -1667,6 +1690,7 @@ impl Controller {
             ui.set_find_match_index(find_match_index);
             ui.set_find_selection_end(find_selection_end);
             ui.set_find_selection_start(find_selection_start);
+            ui.set_save_status(save_status.clone().into());
             ui.set_deck_style(match settings.deck_style {
                 DeckStyle::LabelledTabs => "tabs".into(),
                 DeckStyle::ColourChips => "chips".into(),
@@ -2053,6 +2077,7 @@ impl Controller {
         if let Some(note) = self.state.selected_note_mut() {
             note.update_body(body);
         }
+        self.state.save_state = SaveState::Saving;
         self.recount_find_after_edit(previous_body.as_deref(), previous_find_selection);
         self.reset_expanded_idle_close();
         let Some(id) = id else { return };
@@ -2762,6 +2787,7 @@ mod tests {
             expanded_id: None,
             selected_id: None,
             markdown_preview: Settings::default().markdown_styling,
+            save_state: SaveState::Saved,
             find_visible: false,
             find_query: String::new(),
             find_match_count: 0,
@@ -3049,9 +3075,11 @@ mod tests {
             controller.state.selected_id = Some(note_id.clone());
             controller.update_selected_body("first".to_owned());
             controller.update_selected_body("second".to_owned());
+            assert_eq!(controller.state.save_state, SaveState::Saving);
             assert_eq!(controller.pending_note_ids, vec![note_id.clone()]);
             controller.flush_pending();
             assert!(controller.pending_note_ids.is_empty());
+            assert_eq!(controller.state.save_state, SaveState::Saved);
             let saved = controller
                 .state
                 .store

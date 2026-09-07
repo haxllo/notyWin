@@ -133,6 +133,7 @@ export component NotyWindow inherits Window {
     in property <int> find-match-index: -1;
     in property <int> find-selection-start: -1;
     in property <int> find-selection-end: -1;
+    in property <string> save-status: "Saved";
     in-out property <int> editor-focus-request: 0;
     in-out property <string> capture-body: "";
     in property <color> capture-paper: #fbcfa6;
@@ -486,7 +487,8 @@ export component NotyWindow inherits Window {
                     }
                     Text {
                         x: parent.width - 185px; y: 16px; width: 105px; height: 20px;
-                        text: "Saved · just now"; color: expanded-note.ink.with-alpha(0.50);
+                        text: save-status; color: save-status == "Couldn’t save"
+                            ? #bd4b42 : expanded-note.ink.with-alpha(0.50);
                         font-size: 11px; horizontal-alignment: right;
                     }
                     if markdown-styling: Text {
