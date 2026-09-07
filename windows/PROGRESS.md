@@ -121,18 +121,26 @@ All commands below passed on 2026-09-07:
 ```text
 cargo fmt --manifest-path windows/Cargo.toml --all -- --check
 cargo check --manifest-path windows/Cargo.toml
-cargo test --manifest-path windows/Cargo.toml       # 51 passed, 0 failed
+cargo test --manifest-path windows/Cargo.toml       # 53 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is an 11,359,232-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,358,720-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
 The import-table audit reports no static `comctl32.dll` dependency. This proves
 the GNU target can link a PE artifact and avoids the reported loader failure;
 it does not prove MSVC compatibility or Windows runtime behavior.
+
+The editor save lifecycle now ignores redundant normalized body events, avoids
+writing the editor value back during an unchanged refresh, and refreshes the
+visible `Saved`/`Couldn’t save` status after each debounced flush. Failed body
+IDs remain queued for retry. Host regressions cover unchanged events,
+successful coalesced saves, and retryable failures; the Slint timer callback,
+SQLite, encryption, and status behavior still need authoritative Windows
+runtime validation.
 
 ## Known limitations and open verification
 
@@ -154,8 +162,8 @@ following must not be described as verified until tested on Windows:
 
 Known fidelity follow-ups are fan drag reordering, direct interaction with
 notes hidden behind `+N` (the indicator currently opens Library), rich editable
-Markdown spans, incomplete Windows settings parity, live save/error status, and
-Windows screenshot-level typography/icon/shadow comparison. Settings parity
+Markdown spans, incomplete Windows settings parity, and Windows
+screenshot-level typography/icon/shadow comparison. Settings parity
 gaps include shortcut customization, note typography/size, edge activation,
 and per-note text direction. Static follow-ups also include stronger note-ID associated data for
 ciphertext row swapping, physical display identity beyond `\\.\\DISPLAYn`

@@ -84,6 +84,8 @@ Remaining UX gaps are fan drag reordering, direct interaction with notes hidden
 behind `+N` (which currently opens Library), and rich span-level Markdown
 editing. Settings parity is also incomplete for shortcut customization, note
 typography/size, edge activation, and per-note text direction. The expanded
-note has no live save/error status beyond its static save indication.
+note exposes `Saving…`, `Saved`, and `Couldn’t save` states; body writes are
+debounced, unchanged editor values are ignored, and failed writes remain
+retryable. The status lifecycle still requires real Windows runtime validation.
 Screenshot-level typography, icon, and shadow comparison likewise requires
 fresh Windows captures rather than the host unit-test environment.

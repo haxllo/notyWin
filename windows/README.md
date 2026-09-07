@@ -39,12 +39,18 @@ stock text input is a rich Markdown editor.
 
 ## Verification boundary
 
-The repository currently verifies formatting, host compilation, 51 host unit
+The repository currently verifies formatting, host compilation, 53 host unit
 tests, a GNU Windows-target type check, and a GNU release import-table audit.
 A real Windows 10/11 x64 session is still required to validate MSVC linking,
 Win32 activation and hit testing, global hotkeys, DPAPI, mixed-DPI monitors,
 fullscreen suppression, and visual fidelity. The project is therefore not
 described as runtime-verified until those checks have been run on Windows.
+
+Editor autosave coalesces only actual body changes, ignores redundant values
+fed back during UI refresh, and refreshes the visible status after each
+debounced persistence attempt. Failed writes remain queued for retry. The
+host tests cover this lifecycle; SQLite/encryption errors and the Slint timer
+event path still require real Windows runtime validation.
 
 The current interaction model opens a fan tab by click, can show a delayed
 preview card on hover, and can optionally open the note after a longer hover.
@@ -62,8 +68,6 @@ tool window. These checks do not replace real Windows runtime validation.
   span-level editing.
 - Settings parity is incomplete: shortcut customization, note typography/size,
   edge activation, and per-note text direction are not exposed yet.
-- The expanded note does not surface live save/error status beyond its static
-  save indication.
 - Typography, icons, shadows, and other screenshot-level details still need
   comparison against fresh Windows captures.
 

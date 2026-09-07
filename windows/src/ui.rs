@@ -1796,12 +1796,16 @@ impl Controller {
             }
             if let Some(note) = selected.as_ref() {
                 ui.set_expanded_note(note_data(note));
-                ui.set_editor_body(note.body.clone().into());
+                if ui.get_editor_body().as_str() != note.body.as_str() {
+                    ui.set_editor_body(note.body.clone().into());
+                }
                 ui.set_pinned(note.pinned);
                 ui.set_selected_id(note.id.clone().into());
             } else {
                 ui.set_selected_id(SharedString::default());
-                ui.set_editor_body(SharedString::default());
+                if !ui.get_editor_body().as_str().is_empty() {
+                    ui.set_editor_body(SharedString::default());
+                }
                 ui.set_pinned(false);
             }
 
@@ -2144,21 +2148,25 @@ impl Controller {
     }
 
     fn update_selected_body(&mut self, body: String) {
-        let previous_body = self.state.selected_note().map(|note| note.body.clone());
-        let previous_find_selection = self.active_find_selection();
-        let id = self
+        let Some((id, previous_body)) = self
             .state
-            .expanded_id
-            .as_deref()
-            .or(self.state.selected_id.as_deref())
-            .map(str::to_owned);
-        if let Some(note) = self.state.selected_note_mut() {
-            note.update_body(body);
+            .selected_note()
+            .map(|note| (note.id.clone(), note.body.clone()))
+        else {
+            return;
+        };
+        let body = body.replace("\r\n", "\n");
+        if body == previous_body {
+            return;
         }
+        let previous_find_selection = self.active_find_selection();
+        let Some(note) = self.state.selected_note_mut() else {
+            return;
+        };
+        note.update_body(body);
         self.state.save_state = SaveState::Saving;
-        self.recount_find_after_edit(previous_body.as_deref(), previous_find_selection);
+        self.recount_find_after_edit(Some(&previous_body), previous_find_selection);
         self.reset_expanded_idle_close();
-        let Some(id) = id else { return };
         if !self
             .pending_note_ids
             .iter()
@@ -2172,7 +2180,7 @@ impl Controller {
             Duration::from_millis(250),
             move || {
                 if let Some(controller) = weak.upgrade() {
-                    controller.borrow_mut().flush_selected();
+                    Controller::flush_pending_from_timer(&controller);
                 }
             },
         );
@@ -2192,8 +2200,9 @@ impl Controller {
         }
     }
 
-    fn flush_selected(&mut self) {
-        self.flush_pending();
+    fn flush_pending_from_timer(controller: &Rc<RefCell<Self>>) {
+        controller.borrow_mut().flush_pending();
+        Controller::refresh(controller);
     }
 
     pub fn flush_pending(&mut self) {
@@ -2214,7 +2223,7 @@ impl Controller {
                 Duration::from_millis(250),
                 move || {
                     if let Some(controller) = weak.upgrade() {
-                        controller.borrow_mut().flush_pending();
+                        Controller::flush_pending_from_timer(&controller);
                     }
                 },
             );
@@ -3227,7 +3236,10 @@ mod tests {
             controller.update_selected_body("second".to_owned());
             assert_eq!(controller.state.save_state, SaveState::Saving);
             assert_eq!(controller.pending_note_ids, vec![note_id.clone()]);
-            controller.flush_pending();
+        }
+        Controller::flush_pending_from_timer(&controller);
+        {
+            let mut controller = controller.borrow_mut();
             assert!(controller.pending_note_ids.is_empty());
             assert_eq!(controller.state.save_state, SaveState::Saved);
             let saved = controller
@@ -3236,6 +3248,56 @@ mod tests {
                 .load_notes()
                 .expect("load saved note");
             assert_eq!(saved[0].body, "second");
+        }
+    }
+
+    #[test]
+    fn redundant_editor_events_do_not_schedule_or_retimestamp_autosave() {
+        let note = Note::new("initial\n", 0, 0.0);
+        let note_id = note.id.clone();
+        let original_modified_at = note.modified_at;
+        let controller = test_controller(vec![note]);
+        {
+            let mut controller = controller.borrow_mut();
+            controller.state.expanded_id = Some(note_id.clone());
+            controller.state.selected_id = Some(note_id);
+
+            controller.update_selected_body("initial\r\n".to_owned());
+
+            assert!(controller.pending_note_ids.is_empty());
+            assert_eq!(controller.state.save_state, SaveState::Saved);
+            assert_eq!(controller.state.notes[0].modified_at, original_modified_at);
+        }
+    }
+
+    #[test]
+    fn failed_autosave_stays_visible_and_retryable() {
+        let mut note = Note::new("unreadable", 0, 0.0);
+        note.body.clear();
+        note.body_unreadable = true;
+        let note_id = note.id.clone();
+        let controller = test_controller(vec![note]);
+        {
+            let mut controller = controller.borrow_mut();
+            controller.state.expanded_id = Some(note_id.clone());
+            controller.state.selected_id = Some(note_id.clone());
+            controller.pending_note_ids.push(note_id.clone());
+        }
+        Controller::flush_pending_from_timer(&controller);
+        {
+            let mut controller = controller.borrow_mut();
+
+            assert_eq!(controller.state.save_state, SaveState::Error);
+            assert_eq!(controller.pending_note_ids, vec![note_id.clone()]);
+
+            controller.update_selected_body("recovered".to_owned());
+            assert_eq!(controller.state.save_state, SaveState::Saving);
+        }
+        Controller::flush_pending_from_timer(&controller);
+        {
+            let controller = controller.borrow();
+            assert_eq!(controller.state.save_state, SaveState::Saved);
+            assert!(controller.pending_note_ids.is_empty());
         }
     }
 

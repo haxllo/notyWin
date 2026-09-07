@@ -30,6 +30,10 @@ activation, and visual fidelity still require a Windows 10/11 x64 session.
 decides whether a note is active, archived, deleted, or expanded. `Store` owns
 SQLite and is called through small synchronous mutations on the UI thread only
 for short prepared statements; body writes are coalesced with a 250 ms timer.
+Editor events that do not change the normalized body are ignored, and the
+timer refreshes the projected save status after both successful and failed
+writes. Failed body IDs remain queued so a transient persistence error can be
+retried without losing the in-memory edit.
 Structural mutations are written immediately, and shutdown flushes only pending
 note IDs rather than replaying the entire in-memory list. Windows also holds a
 per-user-session named mutex, so a second process exits before it can load a
