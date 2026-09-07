@@ -44,15 +44,16 @@ use windows_sys::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW,
                 DestroyWindow, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GWLP_USERDATA,
                 GetCursorPos, GetForegroundWindow, GetMessageW, GetWindowLongPtrW, GetWindowRect,
-                GetWindowThreadProcessId, HTTRANSPARENT, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST,
-                IsIconic, IsWindow, IsWindowVisible, MB_ICONWARNING, MB_OK, MSG, MessageBoxW,
-                PM_NOREMOVE, PeekMessageW, PostThreadMessageW, RegisterClassW, SW_SHOWNORMAL,
-                SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
-                SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, TranslateMessage, WM_APP,
-                WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_NCCREATE, WM_NCDESTROY,
-                WM_NCHITTEST, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSW, WS_CAPTION, WS_EX_APPWINDOW,
-                WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-                WS_SYSMENU, WS_THICKFRAME,
+                GetWindowThreadProcessId, HTCLIENT, HTTRANSPARENT, HWND_NOTOPMOST, HWND_TOP,
+                HWND_TOPMOST, IsIconic, IsWindow, IsWindowVisible, MA_NOACTIVATE, MB_ICONWARNING,
+                MB_OK, MSG, MessageBoxW, PM_NOREMOVE, PeekMessageW, PostThreadMessageW,
+                RegisterClassW, SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+                SWP_NOOWNERZORDER, SWP_NOSIZE, SetForegroundWindow, SetWindowLongPtrW,
+                SetWindowPos, TranslateMessage, WM_APP, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY,
+                WM_MOUSEACTIVATE, WM_NCCREATE, WM_NCDESTROY, WM_NCHITTEST, WM_QUIT,
+                WM_SETTINGCHANGE, WNDCLASSW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_NOACTIVATE,
+                WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
+                WS_THICKFRAME,
             },
         },
     },
@@ -413,8 +414,14 @@ unsafe extern "system" fn hit_test_subclass(
                 if !unsafe { (*state).mode.accepts(local_x, local_y) } {
                     return HTTRANSPARENT as LRESULT;
                 }
+                return HTCLIENT as LRESULT;
             }
         }
+    }
+    if message == WM_MOUSEACTIVATE
+        && unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } & WS_EX_NOACTIVATE as isize != 0
+    {
+        return MA_NOACTIVATE as LRESULT;
     }
 
     let result = if let Some(api) = comctl_subclass_api() {

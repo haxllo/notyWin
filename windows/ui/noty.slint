@@ -154,7 +154,6 @@ export component NotyWindow inherits Window {
     in property <string> display-target: "all";
 
     callback deck-hovered(bool);
-    callback tab-hovered();
     callback display-changed();
     callback escape-pressed();
     callback back-to-deck();
@@ -293,7 +292,6 @@ export component NotyWindow inherits Window {
             height: root.height;
             enabled: root.view == "deck";
             changed has-hover => { root.deck-hovered(self.has-hover); }
-        }
 
         if deck-state == "rest": Rectangle {
             x: left-edge ? 0px : root.width - pill-width;
@@ -331,6 +329,8 @@ export component NotyWindow inherits Window {
         }
 
         if deck-state == "fan": Rectangle {
+            width: root.width;
+            height: root.height;
             background: transparent;
             for note[index] in notes : Rectangle {
                 x: fan-item-x;
@@ -378,11 +378,10 @@ export component NotyWindow inherits Window {
                     overflow: clip;
                 }
                 TouchArea {
-                    changed has-hover => {
-                        if self.has-hover {
-                            root.tab-hovered();
-                        }
-                    }
+                    x: deck-style == "tabs" ? -3px : 0px;
+                    y: deck-style == "tabs" ? -1px : 0px;
+                    width: deck-style == "tabs" ? parent.width + 6px : parent.width;
+                    height: deck-style == "tabs" ? parent.height + 2px : parent.height;
                     clicked => { root.note-clicked(note.id); }
                 }
                 ContextMenuArea {
@@ -643,6 +642,8 @@ export component NotyWindow inherits Window {
                 }
             }
         }
+    }
+
     }
 
     if view == "library": Rectangle {

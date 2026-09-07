@@ -32,6 +32,7 @@ pub struct Controller {
     self_weak: RcWeak<RefCell<Controller>>,
     activation_requested: bool,
     previous_foreground: Option<platform::FocusTarget>,
+    fullscreen_state: Vec<(u64, bool)>,
 }
 
 pub struct AppState {
@@ -298,6 +299,7 @@ impl Controller {
                 self_weak: weak.clone(),
                 activation_requested: false,
                 previous_foreground: None,
+                fullscreen_state: Vec::new(),
             })
         });
         let primary_display_id = controller
@@ -321,22 +323,12 @@ impl Controller {
                     let display_id = weak_ui
                         .upgrade()
                         .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
-                    controller
+                    let should_refresh = controller
                         .borrow_mut()
                         .handle_deck_hover(inside, display_id);
-                    Controller::refresh(&controller);
-                }
-            });
-        }
-        {
-            let weak = weak_controller.clone();
-            let weak_ui = ui.as_weak();
-            ui.on_tab_hovered(move || {
-                if let Some(controller) = weak.upgrade() {
-                    let display_id = weak_ui
-                        .upgrade()
-                        .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
-                    controller.borrow_mut().handle_deck_hover(true, display_id);
+                    if should_refresh {
+                        Controller::refresh(&controller);
+                    }
                 }
             });
         }
@@ -672,6 +664,8 @@ impl Controller {
             });
         }
 
+        controller.borrow_mut().sync_fullscreen_state();
+
         let weak = Rc::downgrade(&controller);
         controller.borrow_mut().foreground_timer.start(
             TimerMode::Repeated,
@@ -701,8 +695,11 @@ impl Controller {
                         controller.borrow_mut().return_to_deck();
                         Controller::refresh(&controller);
                     } else if should_poll {
-                        Controller::sync_displays(&controller);
-                        Controller::refresh(&controller);
+                        let displays_changed = Controller::sync_displays(&controller);
+                        let fullscreen_changed = controller.borrow_mut().sync_fullscreen_state();
+                        if displays_changed || fullscreen_changed {
+                            Controller::refresh(&controller);
+                        }
                     }
                 }
             },
@@ -728,21 +725,12 @@ impl Controller {
                     let display_id = weak_ui
                         .upgrade()
                         .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
-                    Controller::dispatch(&controller, |controller| {
-                        controller.handle_deck_hover(inside, display_id);
-                    });
-                }
-            });
-        }
-        {
-            let weak = weak_controller.clone();
-            let weak_ui = ui.as_weak();
-            ui.on_tab_hovered(move || {
-                if let Some(controller) = weak.upgrade() {
-                    let display_id = weak_ui
-                        .upgrade()
-                        .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
-                    controller.borrow_mut().handle_deck_hover(true, display_id);
+                    let should_refresh = controller
+                        .borrow_mut()
+                        .handle_deck_hover(inside, display_id);
+                    if should_refresh {
+                        Controller::refresh(&controller);
+                    }
                 }
             });
         }
@@ -1195,12 +1183,13 @@ impl Controller {
         }
     }
 
-    pub fn sync_displays(controller: &Rc<RefCell<Self>>) {
+    pub fn sync_displays(controller: &Rc<RefCell<Self>>) -> bool {
         let displays = platform::displays();
-        let missing = {
+        let (missing, changed) = {
             let mut controller = controller.borrow_mut();
             let target_ids = target_display_ids(&controller.state.settings, &displays);
             let displays_unchanged = displays == controller.state.displays;
+            let previous_active_display_id = controller.state.active_display_id;
             controller.state.displays = displays.clone();
             if controller
                 .state
@@ -1241,11 +1230,11 @@ impl Controller {
                 })
                 .map(|display| display.id)
                 .collect::<Vec<_>>();
-            if displays_unchanged && missing.is_empty() && existing == present_ids {
-                Vec::new()
-            } else {
-                missing
-            }
+            let changed = !displays_unchanged
+                || !missing.is_empty()
+                || existing != present_ids
+                || previous_active_display_id != controller.state.active_display_id;
+            (missing, changed)
         };
 
         for display_id in missing {
@@ -1256,12 +1245,36 @@ impl Controller {
                 Err(error) => eprintln!("Noty: could not create display window: {error}"),
             }
         }
+        changed
     }
 
-    fn handle_deck_hover(&mut self, inside: bool, display_id: Option<u64>) {
+    fn sync_fullscreen_state(&mut self) -> bool {
+        let current = self
+            .state
+            .displays
+            .iter()
+            .map(|display| (display.id, platform::display_is_fullscreen(display.id)))
+            .collect::<Vec<_>>();
+        let changed = current != self.fullscreen_state;
+        self.fullscreen_state = current;
+        changed
+    }
+
+    fn handle_deck_hover(&mut self, inside: bool, display_id: Option<u64>) -> bool {
+        self.deck_hovered = inside;
+        self.handle_pointer_hover(self.deck_hovered, display_id)
+    }
+
+    fn pointer_inside_deck(&self) -> bool {
+        self.deck_hovered
+    }
+
+    fn handle_pointer_hover(&mut self, inside: bool, display_id: Option<u64>) -> bool {
         if self.state.view != View::Deck {
-            return;
+            return false;
         }
+        let previous_state = self.state.deck_state;
+        let previous_active_display_id = self.state.active_display_id;
         let expanded = self.state.expanded_id.is_some();
         let expanded_pinned = self
             .state
@@ -1270,7 +1283,6 @@ impl Controller {
             .and_then(|id| self.state.notes.iter().find(|note| note.id == id))
             .is_some_and(|note| note.pinned);
         if inside {
-            self.deck_hovered = true;
             if let Some(display_id) = display_id {
                 if self.state.target_display_ids().contains(&display_id) {
                     self.state.active_display_id = Some(display_id);
@@ -1286,7 +1298,6 @@ impl Controller {
                 );
             }
         } else {
-            self.deck_hovered = false;
             if let Some(display_id) = display_id {
                 self.hovered_display_id = Some(display_id);
             }
@@ -1304,6 +1315,8 @@ impl Controller {
                 );
             }
         }
+        previous_state != self.state.deck_state
+            || previous_active_display_id != self.state.active_display_id
     }
 
     fn cancel_hover_collapse(&mut self) {
@@ -1335,7 +1348,7 @@ impl Controller {
                                     .is_some_and(|note| !note.pinned)
                             });
                         (
-                            !controller.deck_hovered
+                            !controller.pointer_inside_deck()
                                 && controller.state.view == View::Deck
                                 && controller.state.active_display_id == display_id
                                 && ((should_close
@@ -1366,7 +1379,7 @@ impl Controller {
         if self.state.view == View::Deck
             && self.state.deck_state == DeckState::Fan
             && !self.state.settings.deck_always_shown
-            && !self.deck_hovered
+            && !self.pointer_inside_deck()
             && self.state.pending_deletes.is_empty()
         {
             self.schedule_hover_collapse(
@@ -2067,7 +2080,7 @@ impl Controller {
             && self.state.deck_state == DeckState::Expanded
             && self.state.expanded_id.is_some()
             && !self.expanded_note_is_pinned()
-            && !self.deck_hovered
+            && !self.pointer_inside_deck()
         {
             self.schedule_hover_collapse(
                 Duration::from_secs(60),
@@ -2368,12 +2381,24 @@ fn deck_hit_test_mode(
     let physical = |value: f32| value.round().max(1.0) as u32;
     let item = fan_item_layout(frame, left_edge, style, deck_scale, display_scale);
     let mut regions = Vec::with_capacity(shown_count + 4);
+    let tab_hit_padding = if style == DeckStyle::LabelledTabs {
+        physical(3.0 * deck_scale * display_scale) as i32
+    } else {
+        0
+    };
+    let tab_hit_vertical_padding = if style == DeckStyle::LabelledTabs {
+        physical(1.0 * deck_scale * display_scale) as i32
+    } else {
+        0
+    };
+    // The tab cards are rotated by three degrees, so their painted bounds are
+    // slightly wider than the untransformed layout rectangles.
     for index in 0..shown_count {
         regions.push(HitTestRect {
-            x: item.x,
-            y: item.top + index as i32 * item.pitch as i32,
-            width: item.width,
-            height: item.height,
+            x: item.x - tab_hit_padding,
+            y: item.top + index as i32 * item.pitch as i32 - tab_hit_vertical_padding,
+            width: item.width + tab_hit_padding as u32 * 2,
+            height: item.height + tab_hit_vertical_padding as u32 * 2,
         });
     }
 
@@ -2767,6 +2792,7 @@ mod tests {
                 self_weak: weak.clone(),
                 activation_requested: false,
                 previous_foreground: None,
+                fullscreen_state: Vec::new(),
             })
         })
     }
@@ -3179,6 +3205,25 @@ mod tests {
     }
 
     #[test]
+    fn persistent_deck_hover_survives_a_fan_tab_click() {
+        let controller = test_controller(notes(1));
+        let display_id = controller.borrow().state.active_display_id;
+        {
+            let mut controller = controller.borrow_mut();
+            controller.state.deck_state = DeckState::Fan;
+            controller.handle_deck_hover(true, display_id);
+            controller.handle_deck_hover(true, display_id);
+
+            assert!(controller.pointer_inside_deck());
+            assert!(!controller.idle_timer_armed);
+
+            controller.handle_deck_hover(false, display_id);
+            assert!(!controller.pointer_inside_deck());
+            assert!(controller.idle_timer_armed);
+        }
+    }
+
+    #[test]
     fn fan_hit_testing_connects_edge_pill_to_tabs_and_passes_blank_area_through() {
         let mode = deck_hit_test_mode(
             View::Deck,
@@ -3197,12 +3242,23 @@ mod tests {
             0,
             false,
         );
+        let HitTestMode::Regions(regions) = &mode else {
+            panic!("fan decks should use regional hit testing");
+        };
+        assert_eq!(
+            regions[0],
+            HitTestRect {
+                x: 5,
+                y: 23,
+                width: 36,
+                height: 108,
+            }
+        );
 
         assert!(mode.accepts(10, 40));
         assert!(mode.accepts(10, 380));
         assert!(mode.accepts(45, 200));
-        assert!(mode.accepts(35, 200));
-        assert!(!mode.accepts(30, 200));
+        assert!(mode.accepts(30, 100));
         assert!(!mode.accepts(2, 200));
 
         let left_mode = deck_hit_test_mode(
@@ -3224,7 +3280,7 @@ mod tests {
         );
         assert!(left_mode.accepts(5, 200));
         assert!(left_mode.accepts(15, 200));
-        assert!(!left_mode.accepts(20, 200));
+        assert!(left_mode.accepts(20, 100));
         assert!(!left_mode.accepts(48, 200));
     }
 
