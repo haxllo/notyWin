@@ -39,30 +39,29 @@ stock text input is a rich Markdown editor.
 
 ## Verification boundary
 
-The repository currently verifies formatting, host compilation, 46 host unit
+The repository currently verifies formatting, host compilation, 51 host unit
 tests, a GNU Windows-target type check, and a GNU release import-table audit.
 A real Windows 10/11 x64 session is still required to validate MSVC linking,
 Win32 activation and hit testing, global hotkeys, DPAPI, mixed-DPI monitors,
 fullscreen suppression, and visual fidelity. The project is therefore not
 described as runtime-verified until those checks have been run on Windows.
 
-The current interaction model opens a fan tab by click. The host suite covers
-the pill-to-tab handoff, including diagonal entry, while the native hit-test
-path returns `HTCLIENT` for accepted regions, `HTTRANSPARENT` for blank fan
-pixels, and `MA_NOACTIVATE` for the nonactivating tool window. These checks do
-not replace real Windows runtime validation.
+The current interaction model opens a fan tab by click, can show a delayed
+preview card on hover, and can optionally open the note after a longer hover.
+The host suite covers the pill-to-tab handoff, including diagonal entry, while
+the native hit-test path returns `HTCLIENT` for accepted regions,
+`HTTRANSPARENT` for blank fan pixels, and `MA_NOACTIVATE` for the nonactivating
+tool window. These checks do not replace real Windows runtime validation.
 
 ### Known UX gaps
 
-- Hover preview/open is not implemented; tabs require a click.
 - Fan drag reordering is not implemented.
 - The `+N` indicator opens Library rather than exposing the hidden notes for
   direct interaction in the fan.
 - Markdown editing is plain text with a separate styled preview, not rich
   span-level editing.
-- Settings parity is incomplete: hover preview/open, shortcut customization,
-  note typography/size, edge activation, and per-note text direction are not
-  exposed yet.
+- Settings parity is incomplete: shortcut customization, note typography/size,
+  edge activation, and per-note text direction are not exposed yet.
 - The expanded note does not surface live save/error status beyond its static
   save indication.
 - Typography, icons, shadows, and other screenshot-level details still need

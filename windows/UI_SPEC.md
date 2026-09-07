@@ -71,19 +71,19 @@ The preview is intentionally not described as rich editable Markdown.
 
 ## Current fidelity boundary
 
-The fan uses click-to-open tabs and staggered Slint movement animations. A
-persistent Slint deck hover ancestor plus a DPI-scaled native edge bridge keeps
-direct and diagonal pill-to-tab handoffs connected; accepted regions use
-`HTCLIENT`, blank fan areas use `HTTRANSPARENT`, and the nonactivating window
-uses `MA_NOACTIVATE`. The handoff and geometry cases have host coverage, but
-transformed-tab coordinates, DPI edge cases, and pass-through behavior still
-need real Windows verification.
+The fan uses click-to-open tabs, an optional delayed hover preview, and an
+optional delayed hover-to-open action, alongside staggered Slint movement
+animations. A persistent Slint deck hover ancestor plus a DPI-scaled native
+edge bridge keeps direct and diagonal pill-to-tab handoffs connected; accepted
+regions use `HTCLIENT`, blank fan areas use `HTTRANSPARENT`, and the
+nonactivating window uses `MA_NOACTIVATE`. The handoff, preview geometry, and
+preview edge-region cases have host coverage, but transformed-tab coordinates,
+DPI edge cases, and pass-through behavior still need real Windows verification.
 
-Remaining UX gaps are hover preview/open, fan drag reordering, direct
-interaction with notes hidden behind `+N` (which currently opens Library), and
-rich span-level Markdown editing. Settings parity is also incomplete for hover
-preview/open, shortcut customization, note typography/size, edge activation,
-and per-note text direction. The expanded note has no live save/error status
-beyond its static save indication. Screenshot-level typography, icon, and
-shadow comparison likewise requires fresh Windows captures rather than the
-host unit-test environment.
+Remaining UX gaps are fan drag reordering, direct interaction with notes hidden
+behind `+N` (which currently opens Library), and rich span-level Markdown
+editing. Settings parity is also incomplete for shortcut customization, note
+typography/size, edge activation, and per-note text direction. The expanded
+note has no live save/error status beyond its static save indication.
+Screenshot-level typography, icon, and shadow comparison likewise requires
+fresh Windows captures rather than the host unit-test environment.

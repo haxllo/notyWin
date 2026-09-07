@@ -95,6 +95,13 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   return `HTTRANSPARENT`, and the nonactivating tool window returns
   `MA_NOACTIVATE`. Entering a tab does not rebuild the Slint models, so it
   cannot consume its click gesture.
+- Fan tabs can show a delayed 180 ms preview card when `tab_preview` is enabled.
+  The card includes the note title, task progress, pin state, and a body
+  snippet; a 150 ms handoff grace period keeps it reachable while the pointer
+  moves from a tab into the card. Preview visibility expands the native fan
+  geometry and hit-test regions on either edge without claiming the blank gap.
+  `open_on_hover` suppresses the preview and retains its 450 ms note-opening
+  behavior.
   Repeated hover events do not restart an active collapse timer; pill-to-fan,
   transformed-tab, edge-control, and blank fan hit-test cases have host
   coverage.
@@ -112,9 +119,9 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 All commands below passed on 2026-09-07:
 
 ```text
-cargo fmt --manifest-path windows/Cargo.toml -- --check
+cargo fmt --manifest-path windows/Cargo.toml --all -- --check
 cargo check --manifest-path windows/Cargo.toml
-cargo test --manifest-path windows/Cargo.toml       # 46 passed, 0 failed
+cargo test --manifest-path windows/Cargo.toml       # 51 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
@@ -145,13 +152,12 @@ following must not be described as verified until tested on Windows:
 - fresh Windows screenshots for rest, fan, expanded note, library, settings,
   and Quick Capture. Repository screenshots are historical references only.
 
-Known fidelity follow-ups are hover preview/open timing, fan drag reordering,
-direct interaction with notes hidden behind `+N` (the indicator currently opens
-Library), rich editable Markdown spans, incomplete Windows settings parity,
-live save/error status, and Windows screenshot-level typography/icon/shadow
-comparison. Settings parity gaps include hover preview/open, shortcut
-customization, note typography/size, edge activation, and per-note text
-direction. Static follow-ups also include stronger note-ID associated data for
+Known fidelity follow-ups are fan drag reordering, direct interaction with
+notes hidden behind `+N` (the indicator currently opens Library), rich editable
+Markdown spans, incomplete Windows settings parity, live save/error status, and
+Windows screenshot-level typography/icon/shadow comparison. Settings parity
+gaps include shortcut customization, note typography/size, edge activation,
+and per-note text direction. Static follow-ups also include stronger note-ID associated data for
 ciphertext row swapping, physical display identity beyond `\\.\\DISPLAYn`
 fallback, a fully visible hotkey-registration error surface, and real runtime
 proof for pass-through semantics.

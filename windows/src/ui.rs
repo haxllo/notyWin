@@ -357,6 +357,14 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            ui.on_preview_changed(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    Controller::refresh(&controller);
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
             ui.on_display_changed(move || {
                 if let Some(controller) = weak.upgrade() {
                     Controller::sync_displays(&controller);
@@ -1125,6 +1133,7 @@ impl Controller {
             }
             "deck-always-shown" => self.state.settings.deck_always_shown = value,
             "open-on-hover" => self.state.settings.open_on_hover = value,
+            "tab-preview" => self.state.settings.tab_preview = value,
             "markdown-styling" => self.state.settings.markdown_styling = value,
             "left-edge" => self.state.settings.deck_on_left_edge = value,
             "pill-hidden" => self.state.settings.pill_hidden = value,
@@ -1659,6 +1668,16 @@ impl Controller {
                 };
                 active_notes.iter().take(limit).cloned().collect::<Vec<_>>()
             };
+            let preview_note_id = ui.get_preview_note_id().to_string();
+            let preview_note_index =
+                if is_active && local_view == View::Deck && local_deck_state == DeckState::Fan {
+                    local_notes
+                        .iter()
+                        .position(|note| note.id == preview_note_id)
+                } else {
+                    None
+                };
+            let preview_visible = preview_note_index.is_some();
             let hidden_count = if local_view == View::Deck && local_deck_state == DeckState::Rest {
                 active_notes.len().saturating_sub(MAX_PILL_DASHES)
             } else if local_view == View::Deck
@@ -1670,19 +1689,22 @@ impl Controller {
                 0
             };
             let mut frame = if local_view == View::Deck {
-                Some(crate::deck::geometry_with_activation_and_visibility(
-                    display.work_area,
-                    local_deck_state,
-                    settings.deck_on_left_edge,
-                    settings.deck_scale,
-                    settings.deck_y_ratio,
-                    settings.deck_style,
-                    settings.note_width as u32,
-                    settings.note_height as u32,
-                    active_notes.len(),
-                    settings.edge_activation,
-                    fan_show_all && local_deck_state == DeckState::Fan,
-                ))
+                Some(
+                    crate::deck::geometry_with_activation_and_visibility_and_preview(
+                        display.work_area,
+                        local_deck_state,
+                        settings.deck_on_left_edge,
+                        settings.deck_scale,
+                        settings.deck_y_ratio,
+                        settings.deck_style,
+                        settings.note_width as u32,
+                        settings.note_height as u32,
+                        active_notes.len(),
+                        settings.edge_activation,
+                        fan_show_all && local_deck_state == DeckState::Fan,
+                        preview_visible,
+                    ),
+                )
             } else {
                 None
             };
@@ -1706,7 +1728,7 @@ impl Controller {
                 && local_deck_state != DeckState::Expanded
                 && !settings.show_over_fullscreen
                 && platform::display_is_fullscreen(display_id);
-            let hit_test = deck_hit_test_mode(
+            let hit_test = deck_hit_test_mode_with_preview(
                 local_view,
                 local_deck_state,
                 frame,
@@ -1717,6 +1739,8 @@ impl Controller {
                 local_notes.len(),
                 hidden_count,
                 pending_delete && is_active,
+                preview_visible,
+                preview_note_index.unwrap_or_default(),
             );
 
             ui.set_display_id(display_id.to_string().into());
@@ -1744,6 +1768,7 @@ impl Controller {
             });
             ui.set_deck_always_shown(settings.deck_always_shown);
             ui.set_open_on_hover(settings.open_on_hover);
+            ui.set_tab_preview(settings.tab_preview);
             ui.set_deck_scale(settings.deck_scale);
             ui.set_launch_at_login(settings.launch_at_login);
             ui.set_show_over_fullscreen(settings.show_over_fullscreen);
@@ -1797,7 +1822,7 @@ impl Controller {
                     platform::centre_window(&ui.window(), 940, 580, display_id)
                 }
                 View::Settings if is_active => {
-                    platform::centre_window(&ui.window(), 600, 660, display_id)
+                    platform::centre_window(&ui.window(), 600, 700, display_id)
                 }
                 View::Capture if is_active => {
                     platform::position_capture_window(&ui.window(), 460, 150, display_id)
@@ -2448,6 +2473,36 @@ fn deck_hit_test_mode(
     hidden_count: usize,
     pending_delete: bool,
 ) -> HitTestMode {
+    deck_hit_test_mode_with_preview(
+        view,
+        deck_state,
+        frame,
+        left_edge,
+        style,
+        deck_scale,
+        display_scale,
+        shown_count,
+        hidden_count,
+        pending_delete,
+        false,
+        0,
+    )
+}
+
+fn deck_hit_test_mode_with_preview(
+    view: View,
+    deck_state: DeckState,
+    frame: Option<PanelGeometry>,
+    left_edge: bool,
+    style: DeckStyle,
+    deck_scale: f32,
+    display_scale: f32,
+    shown_count: usize,
+    hidden_count: usize,
+    pending_delete: bool,
+    preview_visible: bool,
+    preview_index: usize,
+) -> HitTestMode {
     if view != View::Deck || !matches!(deck_state, DeckState::Fan) {
         return HitTestMode::Full;
     }
@@ -2530,6 +2585,28 @@ fn deck_hit_test_mode(
             y: frame.height as i32 - physical(52.0 * display_scale) as i32,
             width: toast_width,
             height: physical(36.0 * display_scale),
+        });
+    }
+
+    if preview_visible {
+        let preview_width = physical(210.0 * deck_scale * display_scale);
+        let preview_gap = physical(10.0 * deck_scale * display_scale) as i32;
+        let preview_height = physical(96.0 * deck_scale * display_scale);
+        let preview_margin = physical(10.0 * display_scale) as i32;
+        let preview_y = (item.top + preview_index as i32 * item.pitch as i32).clamp(
+            preview_margin,
+            (frame.height as i32 - preview_height as i32 - preview_margin).max(preview_margin),
+        );
+        let preview_x = if left_edge {
+            item.x + item.width as i32 + preview_gap
+        } else {
+            item.x - preview_gap - preview_width as i32
+        };
+        regions.push(HitTestRect {
+            x: preview_x,
+            y: preview_y,
+            width: preview_width,
+            height: preview_height,
         });
     }
 
@@ -3199,6 +3276,53 @@ mod tests {
 
         assert!(mode.accepts(100, 300));
         assert!(!mode.accepts(2, 300));
+    }
+
+    #[test]
+    fn preview_hit_region_follows_both_fan_edges_without_claiming_the_gap() {
+        let right_mode = deck_hit_test_mode_with_preview(
+            View::Deck,
+            DeckState::Fan,
+            Some(PanelGeometry {
+                x: 1646,
+                y: 300,
+                width: 274,
+                height: 420,
+            }),
+            false,
+            DeckStyle::LabelledTabs,
+            1.0,
+            1.0,
+            1,
+            0,
+            false,
+            true,
+            0,
+        );
+        assert!(right_mode.accepts(20, 50));
+        assert!(!right_mode.accepts(225, 50));
+
+        let left_mode = deck_hit_test_mode_with_preview(
+            View::Deck,
+            DeckState::Fan,
+            Some(PanelGeometry {
+                x: 0,
+                y: 300,
+                width: 274,
+                height: 420,
+            }),
+            true,
+            DeckStyle::LabelledTabs,
+            1.0,
+            1.0,
+            1,
+            0,
+            false,
+            true,
+            0,
+        );
+        assert!(left_mode.accepts(60, 50));
+        assert!(!left_mode.accepts(45, 50));
     }
 
     #[test]

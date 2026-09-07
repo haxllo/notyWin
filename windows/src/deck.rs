@@ -93,6 +93,7 @@ fn fan_layout(
     deck_scale: f32,
     display_scale: f32,
     show_all: bool,
+    preview_visible: bool,
 ) -> FanLayout {
     let deck_pixels = |value| physical_pixels(value, deck_scale * display_scale);
     let display_pixels = |value| physical_pixels(value, display_scale);
@@ -108,11 +109,17 @@ fn fan_layout(
         DeckStyle::ColourChips => deck_pixels(24.0),
     };
     let control_size = deck_pixels(28.0);
-    let width = tab_width
+    let base_width = tab_width
         .max(item_width)
         .max(control_size)
         .saturating_add(edge_margin.saturating_mul(2))
         .max(display_pixels(50.0));
+    let preview_space = if preview_visible {
+        deck_pixels(220.0)
+    } else {
+        0
+    };
+    let width = base_width.saturating_add(preview_space);
 
     let top = deck_pixels(24.0);
     let (pitch, item_height) = match style {
@@ -184,6 +191,36 @@ pub fn geometry_with_activation_and_visibility(
     edge_activation: f32,
     show_all: bool,
 ) -> PanelGeometry {
+    geometry_with_activation_and_visibility_and_preview(
+        work,
+        state,
+        on_left_edge,
+        scale,
+        deck_y_ratio,
+        style,
+        note_width,
+        note_height,
+        note_count,
+        edge_activation,
+        show_all,
+        false,
+    )
+}
+
+pub fn geometry_with_activation_and_visibility_and_preview(
+    work: WorkArea,
+    state: DeckState,
+    on_left_edge: bool,
+    scale: f32,
+    deck_y_ratio: f32,
+    style: DeckStyle,
+    note_width: u32,
+    note_height: u32,
+    note_count: usize,
+    edge_activation: f32,
+    show_all: bool,
+    preview_visible: bool,
+) -> PanelGeometry {
     geometry_with_activation_inner(
         work,
         state,
@@ -196,6 +233,7 @@ pub fn geometry_with_activation_and_visibility(
         note_count,
         edge_activation,
         show_all,
+        preview_visible,
     )
 }
 
@@ -223,6 +261,7 @@ pub fn geometry_with_activation(
         note_count,
         edge_activation,
         false,
+        false,
     )
 }
 
@@ -238,6 +277,7 @@ fn geometry_with_activation_inner(
     note_count: usize,
     edge_activation: f32,
     show_all: bool,
+    preview_visible: bool,
 ) -> PanelGeometry {
     let deck_scale = scale.clamp(0.7, 1.8);
     let display_scale = work.logical_scale();
@@ -252,7 +292,14 @@ fn geometry_with_activation_inner(
             metrics.pill_height(note_count, scale),
         ),
         DeckState::Fan => {
-            let layout = fan_layout(style, note_count, deck_scale, display_scale, show_all);
+            let layout = fan_layout(
+                style,
+                note_count,
+                deck_scale,
+                display_scale,
+                show_all,
+                preview_visible,
+            );
             (layout.width, layout.height.min(work.height.max(1)))
         }
         DeckState::Expanded => {
@@ -456,6 +503,44 @@ mod tests {
         assert_eq!(panel.height, work.height);
         assert!(panel.width >= 50);
         assert!(panel.y >= work.y);
+    }
+
+    #[test]
+    fn fan_preview_reserves_card_and_gap_width_only_when_visible() {
+        let work = area();
+        let hidden = geometry_with_activation_and_visibility_and_preview(
+            work,
+            DeckState::Fan,
+            false,
+            1.0,
+            0.5,
+            DeckStyle::LabelledTabs,
+            720,
+            580,
+            2,
+            20.0,
+            false,
+            false,
+        );
+        let visible = geometry_with_activation_and_visibility_and_preview(
+            work,
+            DeckState::Fan,
+            false,
+            1.0,
+            0.5,
+            DeckStyle::LabelledTabs,
+            720,
+            580,
+            2,
+            20.0,
+            false,
+            true,
+        );
+
+        let preview_space = (220.0 * work.logical_scale()).round() as u32;
+        assert_eq!(visible.width - hidden.width, preview_space);
+        assert_eq!(hidden.x - visible.x, preview_space as i32);
+        assert_eq!(visible.x + visible.width as i32, work.x + work.width as i32);
     }
 
     #[test]

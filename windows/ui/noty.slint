@@ -128,6 +128,10 @@ export component NotyWindow inherits Window {
     in-out property <int> editor-cursor-position: 0;
     in-out property <bool> markdown-preview: true;
     in-out property <string> hovered-note-id: "";
+    in-out property <int> hovered-note-index: -1;
+    in-out property <string> preview-note-id: "";
+    in-out property <int> preview-note-index: -1;
+    in-out property <bool> preview-card-hovered: false;
     in-out property <bool> find-visible: false;
     in-out property <string> find-query: "";
     in property <int> find-match-count: 0;
@@ -147,6 +151,7 @@ export component NotyWindow inherits Window {
     in property <string> deck-style: "tabs";
     in property <bool> deck-always-shown: false;
     in property <bool> open-on-hover: false;
+    in property <bool> tab-preview: true;
     in property <bool> fan-show-all: false;
     in property <float> deck-scale: 1.0;
     in property <bool> launch-at-login: false;
@@ -158,6 +163,7 @@ export component NotyWindow inherits Window {
     in property <string> display-target: "all";
 
     callback deck-hovered(bool);
+    callback preview-changed(string);
     callback display-changed();
     callback escape-pressed();
     callback back-to-deck();
@@ -220,6 +226,16 @@ export component NotyWindow inherits Window {
         ? fan-more-y + fan-more-height + 12px * deck-scale
         : fan-top + notes.length * fan-item-pitch + fan-item-height;
     private property <length> fan-scroll-height: max(1px, root.height - control-size - 74px);
+    private property <length> preview-width: 210px * deck-scale;
+    private property <length> preview-height: 96px * deck-scale;
+    private property <length> preview-gap: 10px * deck-scale;
+    private property <length> preview-x: left-edge
+        ? fan-item-x + fan-item-width + preview-gap
+        : fan-item-x - preview-width - preview-gap;
+    private property <length> preview-y: min(
+        max(10px, fan-top + max(0, preview-note-index) * fan-item-pitch),
+        max(10px, root.height - preview-height - 10px)
+    );
     private property <bool> library-list-focused: false;
 
     changed markdown-preview => {
@@ -239,8 +255,65 @@ export component NotyWindow inherits Window {
         }
     }
 
+    hover-preview-timer := Timer {
+        interval: 180ms;
+        running: root.tab-preview && !root.open-on-hover && root.view == "deck"
+            && root.deck-state == "fan" && root.hovered-note-id != ""
+            && root.preview-note-id != root.hovered-note-id;
+        triggered => {
+            if (root.hovered-note-id != "" && root.hovered-note-index >= 0) {
+                root.preview-note-id = root.hovered-note-id;
+                root.preview-note-index = root.hovered-note-index;
+            }
+        }
+    }
+
+    hover-preview-hide-timer := Timer {
+        interval: 150ms;
+        running: root.preview-note-id != "" && !root.preview-card-hovered
+            && root.hovered-note-id == "";
+        triggered => {
+            if (!root.preview-card-hovered && root.hovered-note-id == "") {
+                root.preview-note-id = "";
+                root.preview-note-index = -1;
+            }
+        }
+    }
+
+    changed preview-note-id => {
+        root.preview-changed(self.preview-note-id);
+    }
+
     changed deck-state => {
         root.hovered-note-id = "";
+        root.hovered-note-index = -1;
+        root.preview-note-id = "";
+        root.preview-note-index = -1;
+        root.preview-card-hovered = false;
+    }
+
+    changed view => {
+        if (root.view != "deck") {
+            root.hovered-note-id = "";
+            root.hovered-note-index = -1;
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+            root.preview-card-hovered = false;
+        }
+    }
+
+    changed open-on-hover => {
+        if (self.open-on-hover) {
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+        }
+    }
+
+    changed tab-preview => {
+        if (!self.tab-preview) {
+            root.preview-note-id = "";
+            root.preview-note-index = -1;
+        }
     }
 
     keyboard-scope := FocusScope {
@@ -419,7 +492,13 @@ export component NotyWindow inherits Window {
                             width: deck-style == "tabs" ? parent.width + 6px : parent.width;
                             height: deck-style == "tabs" ? parent.height + 2px : parent.height;
                             changed has-hover => {
-                                root.hovered-note-id = self.has-hover ? note.id : "";
+                                if (self.has-hover) {
+                                    root.hovered-note-id = note.id;
+                                    root.hovered-note-index = index;
+                                } else if (root.hovered-note-id == note.id) {
+                                    root.hovered-note-id = "";
+                                    root.hovered-note-index = -1;
+                                }
                             }
                             clicked => { root.note-clicked(note.id); }
                         }
@@ -472,6 +551,47 @@ export component NotyWindow inherits Window {
                         }
                         TouchArea { clicked => { root.reveal-more-notes(); } }
                     }
+                }
+            }
+
+            for note[index] in notes : Rectangle {
+                visible: note.id == preview-note-id;
+                x: preview-x;
+                y: preview-y;
+                width: preview-width;
+                height: preview-height;
+                border-radius: 8px;
+                background: note.paper;
+                border-width: 1px;
+                border-color: note.ink.with-alpha(0.12);
+
+                Rectangle {
+                    x: 10px; y: 10px; width: 7px; height: 7px;
+                    border-radius: 4px; background: note.dash;
+                }
+                Text {
+                    x: 24px; y: 7px; width: preview-width - 58px; height: 20px;
+                    text: note.title; color: note.ink; font-size: 11px;
+                    font-weight: 700; overflow: clip;
+                }
+                if note.total > 0: Text {
+                    x: preview-width - 50px; y: 8px; width: 40px; height: 18px;
+                    text: note.done + "/" + note.total; color: note.ink.with-alpha(0.65);
+                    font-size: 9px; horizontal-alignment: right;
+                }
+                if note.pinned: Text {
+                    x: preview-width - 22px; y: 28px; width: 12px; height: 14px;
+                    text: "●"; color: note.ink.with-alpha(0.65); font-size: 9px;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    x: 10px; y: 31px; width: preview-width - 20px; height: preview-height - 40px;
+                    text: note.body; color: note.ink.with-alpha(0.82); font-size: 10px;
+                    wrap: word-wrap; overflow: clip;
+                }
+                TouchArea {
+                    changed has-hover => { root.preview-card-hovered = self.has-hover; }
+                    clicked => { root.note-clicked(note.id); }
                 }
             }
 
@@ -890,33 +1010,37 @@ export component NotyWindow inherits Window {
         Text { x: 500px; y: 300px; text: open-on-hover ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 284px; width: 540px; height: 34px;
                     clicked => { root.settings-changed("open-on-hover", !open-on-hover); } }
-        Text { x: 30px; y: 340px; text: "Markdown styling"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 340px; text: markdown-styling ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        Text { x: 30px; y: 340px; text: "Preview note on hover"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 340px; text: tab-preview ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 324px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("markdown-styling", !markdown-styling); } }
-        Text { x: 30px; y: 380px; text: "Launch at login"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 380px; text: launch-at-login ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("tab-preview", !tab-preview); } }
+        Text { x: 30px; y: 380px; text: "Markdown styling"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 380px; text: markdown-styling ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 364px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("launch-at-login", !launch-at-login); } }
-        Text { x: 30px; y: 420px; text: "Edge side"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 420px; text: left-edge ? "Left" : "Right"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("markdown-styling", !markdown-styling); } }
+        Text { x: 30px; y: 420px; text: "Launch at login"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 420px; text: launch-at-login ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 404px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("left-edge", !left-edge); } }
-        Text { x: 30px; y: 460px; text: "Hide edge pill"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 460px; text: pill-hidden ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("launch-at-login", !launch-at-login); } }
+        Text { x: 30px; y: 460px; text: "Edge side"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 460px; text: left-edge ? "Left" : "Right"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 444px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("pill-hidden", !pill-hidden); } }
-        Text { x: 30px; y: 500px; text: "Show over fullscreen"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 500px; text: show-over-fullscreen ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("left-edge", !left-edge); } }
+        Text { x: 30px; y: 500px; text: "Hide edge pill"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 500px; text: pill-hidden ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 484px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("pill-hidden", !pill-hidden); } }
+        Text { x: 30px; y: 540px; text: "Show over fullscreen"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 540px; text: show-over-fullscreen ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 524px; width: 540px; height: 34px;
                     clicked => { root.settings-changed("show-over-fullscreen", !show-over-fullscreen); } }
-        Text { x: 30px; y: 540px; text: "Displays"; color: #38272a; font-size: 14px; }
+        Text { x: 30px; y: 580px; text: "Displays"; color: #38272a; font-size: 14px; }
         Text {
-            x: 430px; y: 540px; width: 126px; text: display-target == "main" ? "Main display" : display-target == "all" ? "All displays" : display-target;
+            x: 430px; y: 580px; width: 126px; text: display-target == "main" ? "Main display" : display-target == "all" ? "All displays" : display-target;
             color: #805e5b; font-size: 12px; horizontal-alignment: right;
         }
         TouchArea {
-            x: 24px; y: 524px; width: 540px; height: 34px;
+            x: 24px; y: 564px; width: 540px; height: 34px;
             clicked => {
                 root.display-target-changed(display-target == "all" ? "main" : "all");
             }
