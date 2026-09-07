@@ -83,6 +83,8 @@ corners and keep their right corners square. The handoff, reserved/hovered
 preview geometry, and preview edge-region cases have host coverage, but
 transformed-tab coordinates, DPI edge cases, and pass-through behavior still
 need real Windows verification.
+Fan tabs, `+N`, and the settings/new-note controls are flush with the outward
+monitor edge; the 12 pt gutter is retained on the interior side of the fan.
 
 Remaining UX gaps are fan drag reordering, direct interaction with notes hidden
 behind `+N` (which currently opens Library), and rich span-level Markdown

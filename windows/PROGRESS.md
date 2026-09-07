@@ -103,6 +103,8 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   edge without moving the native fan or claiming the blank gap. Fan tabs,
   preview cards, and expanded note surfaces explicitly round only their left
   corners and clip expanded content to that boundary.
+  Fan tabs, `+N`, new-note, and settings controls are flush with the outward
+  monitor edge while retaining the interior gutter.
   Each per-display window refreshes its native preview hit-test regions when
   its own delayed preview appears or hides.
   `open_on_hover` suppresses the preview and retains its 450 ms note-opening

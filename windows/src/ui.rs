@@ -2469,7 +2469,11 @@ fn fan_item_layout(
         DeckStyle::LabelledTabs => physical(56.0 * deck_scale * display_scale),
         DeckStyle::ColourChips => physical(36.0 * deck_scale * display_scale),
     };
-    let edge_margin = physical(12.0 * display_scale) as i32;
+    let edge_margin = if left_edge {
+        physical(12.0 * display_scale) as i32
+    } else {
+        0
+    };
     FanItemLayout {
         x: if left_edge {
             edge_margin
@@ -2557,10 +2561,12 @@ fn deck_hit_test_mode_with_preview(
     // The tab cards are rotated by three degrees, so their painted bounds are
     // slightly wider than the untransformed layout rectangles.
     for index in 0..hit_item_count {
+        let tab_x = (item.x - tab_hit_padding).max(0);
+        let tab_right = (item.x + item.width as i32 + tab_hit_padding).min(frame.width as i32);
         regions.push(HitTestRect {
-            x: item.x - tab_hit_padding,
+            x: tab_x,
             y: item.top + index as i32 * item.pitch as i32 - tab_hit_vertical_padding,
-            width: item.width + tab_hit_padding as u32 * 2,
+            width: tab_right.saturating_sub(tab_x) as u32,
             height: item.height + tab_hit_vertical_padding as u32 * 2,
         });
     }
@@ -2591,7 +2597,7 @@ fn deck_hit_test_mode_with_preview(
     let control_x = if left_edge {
         physical(12.0 * display_scale) as i32
     } else {
-        frame.width as i32 - physical(12.0 * display_scale) as i32 - control_size as i32
+        frame.width as i32 - control_size as i32
     };
     for offset in [22.0, 62.0] {
         regions.push(HitTestRect {
@@ -3363,7 +3369,7 @@ mod tests {
             Some(PanelGeometry {
                 x: 1646,
                 y: 300,
-                width: 274,
+                width: 270,
                 height: 420,
             }),
             false,
@@ -3377,7 +3383,7 @@ mod tests {
             0,
         );
         assert!(right_mode.accepts(20, 50));
-        assert!(!right_mode.accepts(225, 50));
+        assert!(!right_mode.accepts(235, 50));
 
         let left_mode = deck_hit_test_mode_with_preview(
             View::Deck,
@@ -3385,7 +3391,7 @@ mod tests {
             Some(PanelGeometry {
                 x: 0,
                 y: 300,
-                width: 274,
+                width: 270,
                 height: 420,
             }),
             true,
@@ -3589,15 +3595,33 @@ mod tests {
         assert_eq!(
             regions[0],
             HitTestRect {
-                x: 5,
+                x: 17,
                 y: 23,
-                width: 36,
+                width: 33,
                 height: 108,
             }
         );
+        assert_eq!(
+            regions[1],
+            HitTestRect {
+                x: 22,
+                y: 370,
+                width: 28,
+                height: 28,
+            }
+        );
+        assert_eq!(
+            regions[2],
+            HitTestRect {
+                x: 22,
+                y: 330,
+                width: 28,
+                height: 28,
+            }
+        );
 
-        assert!(mode.accepts(10, 40));
-        assert!(mode.accepts(10, 380));
+        assert!(!mode.accepts(10, 40));
+        assert!(mode.accepts(49, 380));
         assert!(mode.accepts(45, 200));
         assert!(mode.accepts(30, 100));
         assert!(!mode.accepts(2, 200));
@@ -3651,7 +3675,7 @@ mod tests {
         assert_eq!(
             regions[2],
             HitTestRect {
-                x: 72,
+                x: 84,
                 y: 171,
                 width: 36,
                 height: 51,

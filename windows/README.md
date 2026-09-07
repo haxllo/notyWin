@@ -16,6 +16,9 @@ expanded note grows out of its selected tab.
   the executable import table.
 - Explicit note model and SQLite persistence with encrypted note bodies.
 - Rest, fan, and expanded deck states with shingled tabs and colour chips.
+- Fan tabs, `+N`, and settings controls terminate at the outward monitor edge;
+  the panel keeps its gutter on the interior side instead of leaving a gap at
+  the screen edge.
 - A persistent deck hover surface with a DPI-scaled native edge bridge, so
   direct and diagonal pill-to-tab handoffs retain click delivery without
   claiming that blank fan pixels are interactive. Optional preview width is

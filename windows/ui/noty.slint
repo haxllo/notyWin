@@ -217,7 +217,7 @@ export component NotyWindow inherits Window {
     private property <length> fan-item-height: deck-style == "tabs" ? 106px * deck-scale : 24px * deck-scale;
     private property <length> fan-item-pitch: deck-style == "tabs" ? tab-pitch : 36px * deck-scale;
     private property <length> fan-top: 24px * deck-scale;
-    private property <length> fan-edge-margin: 12px;
+    private property <length> fan-edge-margin: left-edge ? 12px : 0px;
     private property <length> fan-item-x: left-edge
         ? fan-edge-margin : root.width - fan-item-width - fan-edge-margin;
     private property <length> fan-more-y: fan-top + notes.length * fan-item-pitch + 18px * deck-scale;
@@ -602,7 +602,7 @@ export component NotyWindow inherits Window {
             }
 
             Rectangle {
-                x: left-edge ? 12px : root.width - control-size - 12px;
+                x: left-edge ? fan-edge-margin : root.width - control-size - fan-edge-margin;
                 y: root.height - control-size - 22px;
                 width: control-size;
                 height: control-size;
@@ -616,7 +616,7 @@ export component NotyWindow inherits Window {
                 TouchArea { clicked => { root.create-note(); } }
             }
             Rectangle {
-                x: left-edge ? 12px : root.width - control-size - 12px;
+                x: left-edge ? fan-edge-margin : root.width - control-size - fan-edge-margin;
                 y: root.height - control-size - 62px;
                 width: control-size;
                 height: control-size;

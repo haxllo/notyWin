@@ -75,6 +75,9 @@ used on Windows so the physical pixel frame is updated atomically instead of
 approximating an edge with margins. Because the reserved fan frame is already
 at its preview width, changing hover visibility does not change its edge
 position.
+Fan tabs and the `+N`, new-note, and settings controls are flush with the
+outward-facing monitor edge; the single interior gutter is retained for the
+panel’s breathing room.
 Each display window subscribes to its own preview changes so the native
 hit-test regions are refreshed when a preview appears or hides on a secondary
 monitor as well as the primary one.

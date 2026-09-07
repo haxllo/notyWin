@@ -112,7 +112,8 @@ fn fan_layout(
     let base_width = tab_width
         .max(item_width)
         .max(control_size)
-        .saturating_add(edge_margin.saturating_mul(2))
+        // Keep one interior gutter while the outward-facing side reaches the edge.
+        .saturating_add(edge_margin)
         .max(display_pixels(50.0));
     let preview_space = if preview_space_reserved {
         deck_pixels(220.0)
@@ -450,7 +451,7 @@ mod tests {
             6,
         );
 
-        assert_eq!(panel.width, 108);
+        assert_eq!(panel.width, 100);
         assert_eq!(panel.height, 916);
         assert!(panel.y >= work.y);
         assert!(panel.y + panel.height as i32 <= work.y + work.height as i32);
@@ -477,7 +478,7 @@ mod tests {
             6,
         );
 
-        assert_eq!(panel.width, 108);
+        assert_eq!(panel.width, 100);
         assert_eq!(panel.height, 716);
         assert!(panel.y >= work.y);
         assert!(panel.y + panel.height as i32 <= work.y + work.height as i32);
