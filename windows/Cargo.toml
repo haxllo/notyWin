@@ -1,0 +1,45 @@
+[package]
+name = "noty-win"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "A native Windows edge deck for Noty sticky notes"
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+aes-gcm = "0.10.3"
+dirs = "6.0.0"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+slint = { version = "1.17.1", features = ["raw-window-handle-06", "unstable-winit-030"] }
+uuid = { version = "1.18.1", features = ["serde", "v4"] }
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6.2"
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Security_Cryptography",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+slint-build = "1.17.1"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
