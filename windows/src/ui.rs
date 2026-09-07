@@ -776,6 +776,14 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            ui.on_preview_changed(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    Controller::refresh(&controller);
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
             ui.on_escape_pressed(move || {
                 if let Some(controller) = weak.upgrade() {
                     Controller::dispatch(&controller, |controller| controller.handle_escape());

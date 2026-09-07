@@ -75,6 +75,9 @@ used on Windows so the physical pixel frame is updated atomically instead of
 approximating an edge with margins. Because the reserved fan frame is already
 at its preview width, changing hover visibility does not change its edge
 position.
+Each display window subscribes to its own preview changes so the native
+hit-test regions are refreshed when a preview appears or hides on a secondary
+monitor as well as the primary one.
 
 The window is frameless, a tool window, excluded from Alt-Tab, and configured
 not to activate while it is only a pill/fan. The editor requests activation
