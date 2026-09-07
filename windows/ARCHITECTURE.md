@@ -55,7 +55,10 @@ backend selector, because this app does not use a system tray or native menu.
 That keeps the optional muda/comctl32 integration out of the import table. The
 vendored backend contains the upstream no-muda Windows cfg correction required
 by Slint 1.17.1; the edge subclass APIs used for hit testing are loaded with
-`GetProcAddress` when the app starts.
+`GetProcAddress` when the app starts. The foreground timer still checks for
+external focus when expanded content must dismiss, but display/fullscreen
+reconciliation refreshes the UI only when its display or fullscreen snapshot
+changes; the initial fullscreen snapshot is taken before that timer starts.
 
 ## Window strategy
 
@@ -69,9 +72,14 @@ with margins.
 The window is frameless, a tool window, excluded from Alt-Tab, and configured
 not to activate while it is only a pill/fan. The editor requests activation
 only after a note is selected. Blank fan pixels are returned as `HTTRANSPARENT`
-by a Win32 subclass so the underlying application can receive input. This is a
-Windows behavior that must be verified on real mixed-DPI systems; transformed
-tab bounds and edge pass-through are not proven by the host tests.
+by a Win32 subclass so the underlying application can receive input; accepted
+regions return `HTCLIENT`, and `WM_MOUSEACTIVATE` returns `MA_NOACTIVATE` for
+the nonactivating tool window. The Slint tree keeps one persistent deck hover
+ancestor around the rest, fan, and control content, while a narrow DPI-scaled
+edge bridge overlaps the outer tab edge so direct and diagonal pill-to-tab
+handoffs do not lose the click gesture. These are implementation and host-test
+boundaries, not proof of real mixed-DPI HWND behavior; transformed tab bounds
+and edge pass-through still require Windows validation.
 
 ## Persistence
 

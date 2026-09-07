@@ -7,8 +7,8 @@
 **Last updated:** 2026-09-07 UTC
 **Branch:** `hoplite/koroneia-de38b879`
 **Repository:** `haxllo/notyWin`
-**Native replacement commit:** `fc9f0d8d01720d616b329d11626c8584690893e3`
-**Observed base HEAD:** `2ed091c7201535e743cf69d64a1a0192f72b71ef`
+**Initial native replacement commit:** `fc9f0d8d01720d616b329d11626c8584690893e3`
+**Published head:** `b17e4d0c1e90189629faf64110814cff3126ffe6`
 
 The old managed WPF/WinUI implementation under `windows/` is deleted. The
 replacement is native Rust/Slint/Win32/SQLite. `Sources/` remains untouched.
@@ -87,11 +87,14 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   patched locally, and the hit-test subclass entry points are looked up with
   `LoadLibraryW`/`GetProcAddress` at runtime. Missing exports degrade to the
   default window procedure instead of preventing startup.
-- Hover routing uses Slint fan/pill surfaces and a fan-wide region rather than a
-  conflicting Win32 polling bridge. A narrow DPI-scaled edge bridge overlaps the
-  outer tab edge, keeping diagonal pill-to-tab moves connected while blank fan
-  pixels remain pass-through. Tab hover cancellation does not rebuild the Slint
-  models, so entering a tab cannot consume its click gesture.
+- Hover routing uses one persistent Slint deck hover ancestor around the
+  rest/fan/control content rather than a redundant tab-hover callback and state.
+  A narrow DPI-scaled edge bridge overlaps the outer tab edge, keeping direct
+  and diagonal pill-to-tab moves connected while blank fan pixels remain
+  pass-through. Accepted native regions return `HTCLIENT`, blank fan pixels
+  return `HTTRANSPARENT`, and the nonactivating tool window returns
+  `MA_NOACTIVATE`. Entering a tab does not rebuild the Slint models, so it
+  cannot consume its click gesture.
   Repeated hover events do not restart an active collapse timer; pill-to-fan,
   transformed-tab, edge-control, and blank fan hit-test cases have host
   coverage.
@@ -111,14 +114,14 @@ All commands below passed on 2026-09-07:
 ```text
 cargo fmt --manifest-path windows/Cargo.toml -- --check
 cargo check --manifest-path windows/Cargo.toml
-cargo test --manifest-path windows/Cargo.toml       # 45 passed, 0 failed
+cargo test --manifest-path windows/Cargo.toml       # 46 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is an 11,292,160-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,296,256-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
 The import-table audit reports no static `comctl32.dll` dependency. This proves
 the GNU target can link a PE artifact and avoids the reported loader failure;
@@ -143,12 +146,15 @@ following must not be described as verified until tested on Windows:
   and Quick Capture. Repository screenshots are historical references only.
 
 Known fidelity follow-ups are hover preview/open timing, fan drag reordering,
-direct interaction with notes hidden behind `+N`, rich editable Markdown spans,
-and Windows screenshot-level typography/shadow comparison. Static follow-ups
-also include stronger note-ID associated data for ciphertext row swapping,
-physical display identity beyond `\\.\\DISPLAYn` fallback, a fully visible
-hotkey-registration error surface, and real runtime proof for pass-through
-semantics.
+direct interaction with notes hidden behind `+N` (the indicator currently opens
+Library), rich editable Markdown spans, incomplete Windows settings parity,
+live save/error status, and Windows screenshot-level typography/icon/shadow
+comparison. Settings parity gaps include hover preview/open, shortcut
+customization, note typography/size, edge activation, and per-note text
+direction. Static follow-ups also include stronger note-ID associated data for
+ciphertext row swapping, physical display identity beyond `\\.\\DISPLAYn`
+fallback, a fully visible hotkey-registration error surface, and real runtime
+proof for pass-through semantics.
 
 ## Windows hand-off checklist
 

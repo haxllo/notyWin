@@ -16,6 +16,9 @@ expanded note grows out of its selected tab.
   the executable import table.
 - Explicit note model and SQLite persistence with encrypted note bodies.
 - Rest, fan, and expanded deck states with shingled tabs and colour chips.
+- A persistent deck hover surface with a DPI-scaled native edge bridge, so
+  direct and diagonal pill-to-tab handoffs retain click delivery without
+  claiming that blank fan pixels are interactive.
 - Autosaving editor, inline task markers, archive/delete/undo, library search,
   settings, and an inline case-insensitive `Ctrl+F` Find bar with wraparound
   selection.
@@ -36,16 +39,34 @@ stock text input is a rich Markdown editor.
 
 ## Verification boundary
 
-The repository currently verifies formatting, host compilation, 45 host unit
-tests, a GNU Windows-target type check, and a release import-table audit. A real Windows 10/11 x64 session
-is still required to validate MSVC linking, Win32 activation and hit testing,
-global hotkeys, DPAPI, mixed-DPI monitors, fullscreen suppression, and visual
-fidelity. The project is therefore not described as runtime-verified until
-those checks have been run on Windows.
+The repository currently verifies formatting, host compilation, 46 host unit
+tests, a GNU Windows-target type check, and a GNU release import-table audit.
+A real Windows 10/11 x64 session is still required to validate MSVC linking,
+Win32 activation and hit testing, global hotkeys, DPAPI, mixed-DPI monitors,
+fullscreen suppression, and visual fidelity. The project is therefore not
+described as runtime-verified until those checks have been run on Windows.
 
-The current interaction model opens a fan tab by click. Hover preview/open,
-drag reordering, and direct interaction with notes hidden behind `+N` remain
-follow-up fidelity work rather than silently unsupported claims.
+The current interaction model opens a fan tab by click. The host suite covers
+the pill-to-tab handoff, including diagonal entry, while the native hit-test
+path returns `HTCLIENT` for accepted regions, `HTTRANSPARENT` for blank fan
+pixels, and `MA_NOACTIVATE` for the nonactivating tool window. These checks do
+not replace real Windows runtime validation.
+
+### Known UX gaps
+
+- Hover preview/open is not implemented; tabs require a click.
+- Fan drag reordering is not implemented.
+- The `+N` indicator opens Library rather than exposing the hidden notes for
+  direct interaction in the fan.
+- Markdown editing is plain text with a separate styled preview, not rich
+  span-level editing.
+- Settings parity is incomplete: hover preview/open, shortcut customization,
+  note typography/size, edge activation, and per-note text direction are not
+  exposed yet.
+- The expanded note does not surface live save/error status beyond its static
+  save indication.
+- Typography, icons, shadows, and other screenshot-level details still need
+  comparison against fresh Windows captures.
 
 Read [BUILD.md](BUILD.md) for build and packaging commands, [UI_SPEC.md](UI_SPEC.md)
 for the reference-derived design contract, [ARCHITECTURE.md](ARCHITECTURE.md)

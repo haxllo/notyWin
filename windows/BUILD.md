@@ -99,3 +99,23 @@ hotkeys, quick-capture focus/placement/dismissal, Find selection, task links,
 external links, monitor add/remove, mixed DPI, fullscreen applications,
 single-instance enforcement, forced termination/restart recovery, and idle
 CPU usage. Those checks are pending until a real Windows session is available.
+
+The host suite also covers the fan handoff state and geometry cases used by the
+native edge bridge, including transformed tabs, edge controls, and blank fan
+areas. The bridge deliberately returns `HTCLIENT` only for accepted regions;
+blank fan pixels remain `HTTRANSPARENT`, and the nonactivating window returns
+`MA_NOACTIVATE`. These are source-level/host checks, not proof of actual HWND
+behavior on Windows.
+
+For a Linux GNU cross-target release smoke test, the PE artifact and import
+table can be inspected with:
+
+```bash
+cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
+objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe
+```
+
+The current audit produces an 11,296,256-byte PE32+ x64 executable with no
+static `comctl32.dll` import. This confirms GNU linking and the import-table
+constraint only; it is not a substitute for the MSVC build or Windows runtime
+checks above.
