@@ -24,6 +24,8 @@ use windows_sys::Win32::{
 
 pub type StoreResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
+const CURRENT_SCHEMA_VERSION: i64 = 1;
+
 pub fn data_directory() -> StoreResult<PathBuf> {
     let base = dirs::data_local_dir()
         .ok_or_else(|| {
@@ -97,7 +99,8 @@ impl Store {
                 pinned INTEGER NOT NULL DEFAULT 0,
                 sort_order REAL NOT NULL DEFAULT 0,
                 direction TEXT NOT NULL DEFAULT 'automatic'
-            );",
+            );
+            PRAGMA user_version = 1;",
         )?;
         let key = [7_u8; 32];
         Ok(Self {
@@ -293,6 +296,16 @@ pub fn save_settings(path: &Path, settings: &Settings) -> StoreResult<()> {
 fn ensure_schema(connection: &mut Connection) -> StoreResult<bool> {
     // Prevent simultaneous launches from both inspecting and backfilling a stale schema.
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: i64 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if schema_version > CURRENT_SCHEMA_VERSION {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "notes database schema version {schema_version} is newer than supported version {CURRENT_SCHEMA_VERSION}"
+            ),
+        )
+        .into());
+    }
     transaction.execute_batch(
         "CREATE TABLE IF NOT EXISTS notes (
             id TEXT PRIMARY KEY NOT NULL,
@@ -396,6 +409,7 @@ fn ensure_schema(connection: &mut Connection) -> StoreResult<bool> {
          ON notes (archived, sort_order)",
         [],
     )?;
+    transaction.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))?;
     transaction.commit()?;
     Ok(accepts_legacy_empty_bodies)
 }
@@ -889,6 +903,58 @@ mod tests {
             assert!(!directory.join("note.key").exists());
             let _ = fs::remove_dir_all(directory);
         }
+    }
+
+    #[test]
+    fn schema_version_is_written_and_migrations_are_idempotent() {
+        let directory =
+            std::env::temp_dir().join(format!("noty-schema-version-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("note.key"), [7_u8; 32]).unwrap();
+
+        let first = Store::open(&directory).unwrap();
+        let version: i64 = first
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
+        drop(first);
+
+        let second = Store::open(&directory).unwrap();
+        let version: i64 = second
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
+        drop(second);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn unsupported_schema_version_is_not_quarantined() {
+        let directory =
+            std::env::temp_dir().join(format!("noty-future-schema-{}", uuid::Uuid::new_v4()));
+        let database = directory.join("notes.db");
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("note.key"), [7_u8; 32]).unwrap();
+        let connection = Connection::open(&database).unwrap();
+        connection
+            .execute_batch("CREATE TABLE notes (id TEXT PRIMARY KEY NOT NULL, body BLOB NOT NULL); PRAGMA user_version = 99;")
+            .unwrap();
+        drop(connection);
+
+        let error = Store::open(&directory)
+            .err()
+            .expect("newer schema versions must fail without replacement");
+        assert!(error.to_string().contains("newer than supported version"));
+        assert!(database.exists());
+        assert!(fs::read_dir(&directory).unwrap().flatten().all(|entry| {
+            !entry
+                .file_name()
+                .to_string_lossy()
+                .contains(".corrupt-database-")
+        }));
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]
