@@ -127,6 +127,7 @@ export component NotyWindow inherits Window {
     in-out property <string> editor-body: "";
     in-out property <int> editor-cursor-position: 0;
     in-out property <bool> markdown-preview: true;
+    in-out property <string> hovered-note-id: "";
     in-out property <bool> find-visible: false;
     in-out property <string> find-query: "";
     in property <int> find-match-count: 0;
@@ -145,6 +146,7 @@ export component NotyWindow inherits Window {
     in property <int> hidden-count: 0;
     in property <string> deck-style: "tabs";
     in property <bool> deck-always-shown: false;
+    in property <bool> open-on-hover: false;
     in property <bool> fan-show-all: false;
     in property <float> deck-scale: 1.0;
     in property <bool> launch-at-login: false;
@@ -225,6 +227,21 @@ export component NotyWindow inherits Window {
     }
 
     background: transparent;
+
+    hover-open-timer := Timer {
+        interval: 450ms;
+        running: root.open-on-hover && root.view == "deck"
+            && root.deck-state == "fan" && root.hovered-note-id != "";
+        triggered => {
+            if (root.hovered-note-id != "") {
+                root.note-clicked(root.hovered-note-id);
+            }
+        }
+    }
+
+    changed deck-state => {
+        root.hovered-note-id = "";
+    }
 
     keyboard-scope := FocusScope {
         x: 0px;
@@ -401,6 +418,9 @@ export component NotyWindow inherits Window {
                             y: deck-style == "tabs" ? -1px : 0px;
                             width: deck-style == "tabs" ? parent.width + 6px : parent.width;
                             height: deck-style == "tabs" ? parent.height + 2px : parent.height;
+                            changed has-hover => {
+                                root.hovered-note-id = self.has-hover ? note.id : "";
+                            }
                             clicked => { root.note-clicked(note.id); }
                         }
                         ContextMenuArea {
@@ -866,33 +886,37 @@ export component NotyWindow inherits Window {
                    horizontal-alignment: center; vertical-alignment: center; }
             TouchArea { clicked => { root.settings-changed("deck-always-shown", !deck-always-shown); } }
         }
-        Text { x: 30px; y: 300px; text: "Markdown styling"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 300px; text: markdown-styling ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        Text { x: 30px; y: 300px; text: "Open note on hover"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 300px; text: open-on-hover ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 284px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("markdown-styling", !markdown-styling); } }
-        Text { x: 30px; y: 340px; text: "Launch at login"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 340px; text: launch-at-login ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("open-on-hover", !open-on-hover); } }
+        Text { x: 30px; y: 340px; text: "Markdown styling"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 340px; text: markdown-styling ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 324px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("launch-at-login", !launch-at-login); } }
-        Text { x: 30px; y: 380px; text: "Edge side"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 380px; text: left-edge ? "Left" : "Right"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("markdown-styling", !markdown-styling); } }
+        Text { x: 30px; y: 380px; text: "Launch at login"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 380px; text: launch-at-login ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 364px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("left-edge", !left-edge); } }
-        Text { x: 30px; y: 420px; text: "Hide edge pill"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 420px; text: pill-hidden ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("launch-at-login", !launch-at-login); } }
+        Text { x: 30px; y: 420px; text: "Edge side"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 420px; text: left-edge ? "Left" : "Right"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 404px; width: 540px; height: 34px;
-                    clicked => { root.settings-changed("pill-hidden", !pill-hidden); } }
-        Text { x: 30px; y: 460px; text: "Show over fullscreen"; color: #38272a; font-size: 14px; }
-        Text { x: 500px; y: 460px; text: show-over-fullscreen ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+                    clicked => { root.settings-changed("left-edge", !left-edge); } }
+        Text { x: 30px; y: 460px; text: "Hide edge pill"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 460px; text: pill-hidden ? "On" : "Off"; color: #805e5b; font-size: 14px; }
         TouchArea { x: 24px; y: 444px; width: 540px; height: 34px;
+                    clicked => { root.settings-changed("pill-hidden", !pill-hidden); } }
+        Text { x: 30px; y: 500px; text: "Show over fullscreen"; color: #38272a; font-size: 14px; }
+        Text { x: 500px; y: 500px; text: show-over-fullscreen ? "On" : "Off"; color: #805e5b; font-size: 14px; }
+        TouchArea { x: 24px; y: 484px; width: 540px; height: 34px;
                     clicked => { root.settings-changed("show-over-fullscreen", !show-over-fullscreen); } }
-        Text { x: 30px; y: 500px; text: "Displays"; color: #38272a; font-size: 14px; }
+        Text { x: 30px; y: 540px; text: "Displays"; color: #38272a; font-size: 14px; }
         Text {
-            x: 430px; y: 500px; width: 126px; text: display-target == "main" ? "Main display" : display-target == "all" ? "All displays" : display-target;
+            x: 430px; y: 540px; width: 126px; text: display-target == "main" ? "Main display" : display-target == "all" ? "All displays" : display-target;
             color: #805e5b; font-size: 12px; horizontal-alignment: right;
         }
         TouchArea {
-            x: 24px; y: 484px; width: 540px; height: 34px;
+            x: 24px; y: 524px; width: 540px; height: 34px;
             clicked => {
                 root.display-target-changed(display-target == "all" ? "main" : "all");
             }

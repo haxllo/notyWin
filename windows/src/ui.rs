@@ -1124,6 +1124,7 @@ impl Controller {
                 }
             }
             "deck-always-shown" => self.state.settings.deck_always_shown = value,
+            "open-on-hover" => self.state.settings.open_on_hover = value,
             "markdown-styling" => self.state.settings.markdown_styling = value,
             "left-edge" => self.state.settings.deck_on_left_edge = value,
             "pill-hidden" => self.state.settings.pill_hidden = value,
@@ -1742,6 +1743,7 @@ impl Controller {
                 DeckStyle::ColourChips => "chips".into(),
             });
             ui.set_deck_always_shown(settings.deck_always_shown);
+            ui.set_open_on_hover(settings.open_on_hover);
             ui.set_deck_scale(settings.deck_scale);
             ui.set_launch_at_login(settings.launch_at_login);
             ui.set_show_over_fullscreen(settings.show_over_fullscreen);
@@ -1795,7 +1797,7 @@ impl Controller {
                     platform::centre_window(&ui.window(), 940, 580, display_id)
                 }
                 View::Settings if is_active => {
-                    platform::centre_window(&ui.window(), 600, 580, display_id)
+                    platform::centre_window(&ui.window(), 600, 660, display_id)
                 }
                 View::Capture if is_active => {
                     platform::position_capture_window(&ui.window(), 460, 150, display_id)
