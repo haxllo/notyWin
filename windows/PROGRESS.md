@@ -88,9 +88,11 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   `LoadLibraryW`/`GetProcAddress` at runtime. Missing exports degrade to the
   default window procedure instead of preventing startup.
 - Hover routing uses Slint fan/pill surfaces and a fan-wide region rather than a
-  conflicting Win32 polling bridge. Repeated hover events do not restart an
-  active collapse timer; pill-to-fan, transformed-tab, edge-control, and blank
-  fan hit-test cases have host coverage.
+  conflicting Win32 polling bridge. A narrow edge bridge keeps the pointer
+  connected from the pill to the tabs while blank fan pixels remain pass-through.
+  Repeated hover events do not restart an active collapse timer; pill-to-fan,
+  transformed-tab, edge-control, and blank fan hit-test cases have host
+  coverage.
 - Startup visibility/configuration ordering, primary-window hover flags,
   screen-edge placement, 200 ms fan collapse timing, and active-display gating
   were corrected. The fan layout and Slint edge geometry share the same

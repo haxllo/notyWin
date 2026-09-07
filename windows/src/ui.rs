@@ -3150,7 +3150,7 @@ mod tests {
     }
 
     #[test]
-    fn fan_hit_testing_keeps_visible_controls_and_passes_blank_area_through() {
+    fn fan_hit_testing_connects_edge_pill_to_tabs_and_passes_blank_area_through() {
         let mode = deck_hit_test_mode(
             View::Deck,
             DeckState::Fan,
