@@ -412,6 +412,23 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
+            ui.on_hover_open_note(move |id| {
+                if let Some(controller) = weak.upgrade() {
+                    if controller.borrow().popup_menu_is_open() {
+                        if let Some(ui) = weak_ui.upgrade() {
+                            ui.set_hovered_note_id(SharedString::default());
+                            ui.set_hovered_note_index(-1);
+                        }
+                        return;
+                    }
+                    controller.borrow_mut().open_note(id.to_string());
+                    Controller::refresh(&controller);
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
             ui.on_note_context_action(move |id, action| {
                 if let Some(controller) = weak.upgrade() {
                     controller
@@ -812,6 +829,23 @@ impl Controller {
             let weak = weak_controller.clone();
             ui.on_note_clicked(move |id| {
                 if let Some(controller) = weak.upgrade() {
+                    let id = id.to_string();
+                    Controller::dispatch(&controller, |controller| controller.open_note(id));
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
+            ui.on_hover_open_note(move |id| {
+                if let Some(controller) = weak.upgrade() {
+                    if controller.borrow().popup_menu_is_open() {
+                        if let Some(ui) = weak_ui.upgrade() {
+                            ui.set_hovered_note_id(SharedString::default());
+                            ui.set_hovered_note_index(-1);
+                        }
+                        return;
+                    }
                     let id = id.to_string();
                     Controller::dispatch(&controller, |controller| controller.open_note(id));
                 }
@@ -1331,6 +1365,12 @@ impl Controller {
         self.deck_hovered
     }
 
+    fn popup_menu_is_open(&self) -> bool {
+        self.windows
+            .iter()
+            .any(|(window, _)| platform::is_tracking_popup_menu(&window.window()))
+    }
+
     fn handle_pointer_hover(&mut self, inside: bool, display_id: Option<u64>) -> bool {
         if self.state.view != View::Deck {
             return false;
@@ -1362,6 +1402,19 @@ impl Controller {
         } else {
             if let Some(display_id) = display_id {
                 self.hovered_display_id = Some(display_id);
+            }
+            if self.popup_menu_is_open() {
+                self.cancel_hover_collapse();
+                self.schedule_hover_collapse(
+                    if expanded {
+                        Duration::from_secs(60)
+                    } else {
+                        FAN_COLLAPSE_DELAY
+                    },
+                    display_id.or(self.hovered_display_id),
+                );
+                return previous_state != self.state.deck_state
+                    || previous_active_display_id != self.state.active_display_id;
             }
             self.cancel_hover_collapse();
             if ((expanded && !expanded_pinned) || !self.state.settings.deck_always_shown)
@@ -1395,7 +1448,7 @@ impl Controller {
         self.hover_timer
             .start(TimerMode::SingleShot, delay, move || {
                 if let Some(controller) = weak.upgrade() {
-                    let (should_collapse, should_close) = {
+                    let (menu_open, should_collapse, should_close) = {
                         let controller = controller.borrow();
                         if controller.hover_generation != generation {
                             return;
@@ -1410,6 +1463,7 @@ impl Controller {
                                     .is_some_and(|note| !note.pinned)
                             });
                         (
+                            controller.popup_menu_is_open(),
                             !controller.pointer_inside_deck()
                                 && controller.state.view == View::Deck
                                 && controller.state.active_display_id == display_id
@@ -1423,6 +1477,11 @@ impl Controller {
                         )
                     };
                     let mut state = controller.borrow_mut();
+                    if menu_open {
+                        state.idle_timer_armed = false;
+                        state.schedule_hover_collapse(Duration::from_millis(100), display_id);
+                        return;
+                    }
                     state.idle_timer_armed = false;
                     if should_collapse {
                         if should_close {
@@ -1443,6 +1502,7 @@ impl Controller {
             && self.state.deck_state == DeckState::Fan
             && !self.state.settings.deck_always_shown
             && !self.pointer_inside_deck()
+            && !self.popup_menu_is_open()
             && self.state.pending_deletes.is_empty()
         {
             self.schedule_hover_collapse(
@@ -1727,9 +1787,7 @@ impl Controller {
             };
             if pending_delete && is_active && local_deck_state == DeckState::Fan {
                 if let Some(frame) = frame.as_mut() {
-                    let minimum_width =
-                        (310.0 * settings.deck_scale * display.work_area.logical_scale()).round()
-                            as u32;
+                    let minimum_width = toast_minimum_width(display.work_area.logical_scale());
                     if frame.width < minimum_width {
                         frame.width = minimum_width;
                         frame.x = if settings.deck_on_left_edge {
@@ -1927,8 +1985,7 @@ impl Controller {
             preview_space_reserved,
         );
         if pending_delete {
-            let minimum_width =
-                (310.0 * settings.deck_scale * display.work_area.logical_scale()).round() as u32;
+            let minimum_width = toast_minimum_width(display.work_area.logical_scale());
             if frame.width < minimum_width {
                 frame.width = minimum_width;
                 frame.x = if settings.deck_on_left_edge {
@@ -3035,6 +3092,10 @@ fn preferred_display_id(
 const MAX_VISIBLE_TABS: usize = crate::model::MAX_VISIBLE_TABS;
 const LIBRARY_PAGE_SIZE: usize = 8;
 
+fn toast_minimum_width(display_scale: f32) -> u32 {
+    (310.0 * display_scale).ceil().max(1.0) as u32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3190,6 +3251,138 @@ mod tests {
                     .any(|note| note.id == second_id)
             );
             assert!(controller.state.pending_deletes.is_empty());
+        }
+    }
+
+    #[test]
+    fn create_note_persists_an_empty_note_and_opens_it() {
+        let controller = test_controller(Vec::new());
+        let note_id;
+        {
+            let mut controller = controller.borrow_mut();
+            controller.create_note(true);
+            note_id = controller.state.notes[0].id.clone();
+
+            assert_eq!(controller.state.notes.len(), 1);
+            assert_eq!(controller.state.notes[0].body, "");
+            assert_eq!(
+                controller.state.selected_id.as_deref(),
+                Some(note_id.as_str())
+            );
+            assert_eq!(
+                controller.state.expanded_id.as_deref(),
+                Some(note_id.as_str())
+            );
+            assert_eq!(controller.state.deck_state, DeckState::Expanded);
+            assert!(controller.activation_requested);
+
+            let persisted = controller.state.store.load_notes().expect("reload notes");
+            assert_eq!(persisted.len(), 1);
+            assert_eq!(persisted[0].id, note_id);
+            assert_eq!(persisted[0].body, "");
+        }
+    }
+
+    #[test]
+    fn delete_then_undo_restores_the_persisted_note() {
+        let note = Note::new("restore me", 0, 0.0);
+        let note_id = note.id.clone();
+        let controller = test_controller(vec![note]);
+
+        let mut controller = controller.borrow_mut();
+        controller.state.selected_id = Some(note_id.clone());
+        controller.delete_selected();
+        assert!(!controller.state.notes.iter().any(|note| note.id == note_id));
+        assert!(
+            controller
+                .state
+                .store
+                .load_notes()
+                .expect("reload deleted notes")
+                .is_empty()
+        );
+
+        controller.undo_delete();
+
+        assert!(controller.state.notes.iter().any(|note| note.id == note_id));
+        assert!(controller.state.pending_deletes.is_empty());
+        let persisted = controller
+            .state
+            .store
+            .load_notes()
+            .expect("reload restored notes");
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted[0].id, note_id);
+        assert_eq!(persisted[0].body, "restore me");
+    }
+
+    #[test]
+    fn create_and_undo_controls_remain_native_hit_testable_on_both_edges() {
+        let work = WorkArea {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            dpi: 144,
+        };
+        let display_scale = work.logical_scale();
+
+        for left_edge in [true, false] {
+            for deck_scale in [0.7, 1.0, 1.5] {
+                let frame = crate::deck::geometry(
+                    work,
+                    DeckState::Fan,
+                    left_edge,
+                    deck_scale,
+                    0.5,
+                    DeckStyle::LabelledTabs,
+                    720,
+                    580,
+                    1,
+                );
+                let mode = deck_hit_test_mode(
+                    View::Deck,
+                    DeckState::Fan,
+                    Some(frame),
+                    left_edge,
+                    DeckStyle::LabelledTabs,
+                    deck_scale,
+                    display_scale,
+                    1,
+                    0,
+                    false,
+                );
+                let control_size = (28.0 * deck_scale * display_scale).ceil() as i32;
+                let control_x = if left_edge {
+                    (12.0 * display_scale).ceil() as i32
+                } else {
+                    frame.width as i32 - control_size
+                };
+                let plus_y =
+                    frame.height as i32 - control_size - (22.0 * display_scale).ceil() as i32;
+                assert!(mode.accepts(control_x + control_size / 2, plus_y + control_size / 2));
+
+                let toast_frame = PanelGeometry {
+                    width: toast_minimum_width(display_scale),
+                    ..frame
+                };
+                let toast_mode = deck_hit_test_mode(
+                    View::Deck,
+                    DeckState::Fan,
+                    Some(toast_frame),
+                    left_edge,
+                    DeckStyle::LabelledTabs,
+                    deck_scale,
+                    display_scale,
+                    1,
+                    0,
+                    true,
+                );
+                assert!(toast_mode.accepts(
+                    toast_frame.width as i32 / 2 + 110,
+                    toast_frame.height as i32 - (52.0 * display_scale).ceil() as i32 + 18
+                ));
+            }
         }
     }
 

@@ -15,11 +15,12 @@ rustup target add x86_64-pc-windows-msvc
 No browser runtime, Node.js, .NET runtime, or external SQLite installation is
 required. `rusqlite` builds SQLite into the executable.
 
-The manifest uses Slint's winit backend directly and disables the optional
-system-tray/menu integration. This avoids a static comctl32 subclass import;
-the native hit-test subclass APIs are resolved at runtime instead. The small
-Slint backend compatibility patch is vendored under `vendor/i-slint-backend-winit`
-so clean builds use the same dependency graph.
+The manifest uses Slint's winit backend directly with the optional `muda`
+feature enabled for native popup menus. No system-tray UI is added. Muda 0.19.3
+is vendored under `vendor/muda` with its subclass entry points resolved at
+runtime instead of becoming static `comctl32` imports. The small Slint backend
+compatibility patch is also vendored under `vendor/i-slint-backend-winit`, so
+clean builds use the same dependency graph.
 
 The native project is not a browser preview, so the repository's web Preview
 server is intentionally not used. Run Cargo directly from `windows\` or pass
@@ -115,7 +116,9 @@ cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-wind
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe
 ```
 
-The current audit produces an 11,360,768-byte PE32+ x64 executable with no
-static `comctl32.dll` import. This confirms GNU linking and the import-table
-constraint only; it is not a substitute for the MSVC build or Windows runtime
-checks above.
+The current audit produces an 11,456,512-byte PE32+ x64 executable with no
+static `comctl32.dll` import. The target feature graph also includes `muda`,
+`raw-window-handle-06`, and `renderer-femtovg`; the subclass names remain in
+the binary only because the vendored runtime loader resolves them by name.
+This confirms GNU linking and the import-table constraint only; it is not a
+substitute for the MSVC build or Windows runtime checks above.

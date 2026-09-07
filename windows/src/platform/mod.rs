@@ -143,6 +143,54 @@ impl HitTestMode {
     }
 }
 
+const POPUP_MENU_ENTER_MESSAGE: u32 = 0x0211;
+const POPUP_MENU_EXIT_MESSAGE: u32 = 0x0212;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct PopupMenuTracker {
+    depth: u32,
+}
+
+impl PopupMenuTracker {
+    pub(super) fn observe(&mut self, message: u32, _wparam: usize) {
+        match message {
+            POPUP_MENU_ENTER_MESSAGE => {
+                self.depth = self.depth.saturating_add(1);
+            }
+            POPUP_MENU_EXIT_MESSAGE => {
+                self.depth = self.depth.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn is_open(self) -> bool {
+        self.depth > 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{POPUP_MENU_ENTER_MESSAGE, POPUP_MENU_EXIT_MESSAGE, PopupMenuTracker};
+
+    #[test]
+    fn popup_menu_tracker_handles_nested_loops_with_false_wparam() {
+        let mut tracker = PopupMenuTracker::default();
+        assert!(!tracker.is_open());
+
+        tracker.observe(POPUP_MENU_ENTER_MESSAGE, 0);
+        tracker.observe(POPUP_MENU_ENTER_MESSAGE, 0);
+        assert!(tracker.is_open());
+
+        tracker.observe(POPUP_MENU_EXIT_MESSAGE, 0);
+        assert!(tracker.is_open());
+        tracker.observe(POPUP_MENU_EXIT_MESSAGE, 0);
+        assert!(!tracker.is_open());
+        tracker.observe(POPUP_MENU_EXIT_MESSAGE, 0);
+        assert!(!tracker.is_open());
+    }
+}
+
 #[cfg(not(windows))]
 mod fallback;
 #[cfg(windows)]
@@ -243,6 +291,10 @@ pub fn apply_window_style(
 
 pub fn update_hit_test(window: &slint::Window, hit_test: HitTestMode) {
     implementation::update_hit_test(window, hit_test);
+}
+
+pub fn is_tracking_popup_menu(window: &slint::Window) -> bool {
+    implementation::is_tracking_popup_menu(window)
 }
 
 pub fn centre_window(window: &slint::Window, width: u32, height: u32, display_id: u64) {

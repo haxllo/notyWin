@@ -23,6 +23,7 @@ uuid = { version = "1.18.1", features = ["serde", "v4"] }
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6.2"
 i-slint-backend-winit = { version = "=1.17.1", default-features = false, features = [
+    "muda",
     "raw-window-handle-06",
     "renderer-femtovg",
 ] }
@@ -54,3 +55,4 @@ strip = true
 
 [patch.crates-io]
 i-slint-backend-winit = { path = "vendor/i-slint-backend-winit" }
+muda = { path = "vendor/muda" }

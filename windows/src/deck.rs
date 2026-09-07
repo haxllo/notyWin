@@ -83,10 +83,6 @@ struct FanLayout {
     height: u32,
 }
 
-fn physical_pixels(value: f32, scale: f32) -> u32 {
-    (value * scale).round().max(1.0) as u32
-}
-
 fn fan_layout(
     style: DeckStyle,
     note_count: usize,
@@ -95,12 +91,12 @@ fn fan_layout(
     show_all: bool,
     preview_space_reserved: bool,
 ) -> FanLayout {
-    let deck_pixels = |value| physical_pixels(value, deck_scale * display_scale);
-    let display_pixels = |value| physical_pixels(value, display_scale);
+    let deck_pixels = |value| value * deck_scale * display_scale;
+    let display_pixels = |value| value * display_scale;
     let shown = if show_all {
-        note_count.max(1)
+        note_count
     } else {
-        note_count.min(MAX_VISIBLE_TABS).max(1)
+        note_count.min(MAX_VISIBLE_TABS)
     } as u32;
     let edge_margin = display_pixels(12.0);
     let tab_width = deck_pixels(30.0);
@@ -113,43 +109,30 @@ fn fan_layout(
         .max(item_width)
         .max(control_size)
         // Keep one interior gutter while the outward-facing side reaches the edge.
-        .saturating_add(edge_margin)
-        .max(display_pixels(50.0));
+        + edge_margin;
+    let base_width = base_width.max(display_pixels(50.0));
     let preview_space = if preview_space_reserved {
         deck_pixels(220.0)
     } else {
-        0
+        0.0
     };
-    let width = base_width.saturating_add(preview_space);
+    let width = (base_width + preview_space).ceil().max(1.0) as u32;
 
     let top = deck_pixels(24.0);
     let (pitch, item_height) = match style {
         DeckStyle::LabelledTabs => (deck_pixels(56.0), deck_pixels(106.0)),
         DeckStyle::ColourChips => (deck_pixels(36.0), deck_pixels(24.0)),
     };
-    let item_bottom = top
-        .saturating_add(shown.saturating_sub(1).saturating_mul(pitch))
-        .saturating_add(item_height);
-    let more_bottom = if !show_all && note_count > MAX_VISIBLE_TABS {
-        let more_pitch = match style {
-            DeckStyle::LabelledTabs => pitch,
-            DeckStyle::ColourChips => display_pixels(36.0),
-        };
-        display_pixels(24.0)
-            .saturating_add(shown.saturating_mul(more_pitch))
-            .saturating_add(display_pixels(18.0))
-            .saturating_add(display_pixels(34.0))
+    let content_bottom = if !show_all && note_count > MAX_VISIBLE_TABS {
+        top + shown as f32 * pitch + deck_pixels(18.0) + deck_pixels(34.0) + deck_pixels(12.0)
     } else {
-        0
+        top + shown as f32 * pitch + item_height
     };
-    let content_bottom = item_bottom.max(more_bottom);
-    // The controls are anchored to the frame's bottom in Slint, so reserve
-    // their size and their unscaled bottom offset after the fan content.
-    let height = content_bottom
-        .saturating_add(control_size)
-        .saturating_add(display_pixels(62.0))
-        .saturating_add(display_pixels(12.0))
-        .max(deck_pixels(180.0));
+    // Slint reserves a fixed 74px logical bottom area after the deck controls;
+    // sum the logical extent before converting it to physical pixels.
+    let required_height = (deck_pixels(180.0) / display_scale)
+        .max((content_bottom + control_size) / display_scale + 74.0);
+    let height = (required_height * display_scale).ceil().max(1.0) as u32;
 
     FanLayout { width, height }
 }
@@ -452,7 +435,7 @@ mod tests {
         );
 
         assert_eq!(panel.width, 100);
-        assert_eq!(panel.height, 916);
+        assert_eq!(panel.height, 940);
         assert!(panel.y >= work.y);
         assert!(panel.y + panel.height as i32 <= work.y + work.height as i32);
     }
@@ -479,9 +462,32 @@ mod tests {
         );
 
         assert_eq!(panel.width, 100);
-        assert_eq!(panel.height, 716);
+        assert_eq!(panel.height, 740);
         assert!(panel.y >= work.y);
         assert!(panel.y + panel.height as i32 <= work.y + work.height as i32);
+    }
+
+    #[test]
+    fn empty_fan_does_not_reserve_a_phantom_item() {
+        let panel = geometry(
+            WorkArea {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                dpi: 96,
+            },
+            DeckState::Fan,
+            false,
+            1.0,
+            0.5,
+            DeckStyle::LabelledTabs,
+            720,
+            580,
+            0,
+        );
+
+        assert_eq!(panel.height, 232);
     }
 
     #[test]
@@ -530,7 +536,6 @@ mod tests {
         for on_left_edge in [true, false] {
             let base = panel(on_left_edge, false);
             let reserved = panel(on_left_edge, true);
-
             assert_eq!(reserved.width - base.width, preview_space);
             if on_left_edge {
                 assert_eq!(base.x, work.x);

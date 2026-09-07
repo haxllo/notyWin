@@ -8,7 +8,7 @@
 **Branch:** `hoplite/koroneia-de38b879`
 **Repository:** `haxllo/notyWin`
 **Initial native replacement commit:** `fc9f0d8d01720d616b329d11626c8584690893e3`
-**Published feature commit:** `7dd34ccc0b5dff6645f789bdee29fdcc6111c8f8`
+**Previous published checkpoint:** `5b9514c84c2c77e46a55b87d548580eed94c6b93`
 
 The old managed WPF/WinUI implementation under `windows/` is deleted. The
 replacement is native Rust/Slint/Win32/SQLite. `Sources/` remains untouched.
@@ -38,7 +38,10 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 - `src/platform/` — Win32 windows, input, hotkeys, startup, monitors, DPI,
   fullscreen reconciliation, instance guard, and the deterministic test fallback.
 - `vendor/i-slint-backend-winit/` — pinned Slint 1.17.1 winit backend with the
-  no-muda Windows cfg correction needed by this tray-free app.
+  repository's Windows compatibility patch; native Muda popup menus are enabled
+  by the Windows manifest.
+- `vendor/muda/` — the locked Muda 0.19.3 source with subclass entry points
+  resolved through `LoadLibraryW`/`GetProcAddress` rather than static imports.
 - `README.md`, `BUILD.md`, `ARCHITECTURE.md`, `UI_SPEC.md` — user, build,
   ownership, and reference-derived visual contracts.
 
@@ -82,11 +85,15 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 - `build.rs` resolves the Slint file relative to the Cargo package (`ui/noty.slint`);
   the Slint tree compiles with balanced view blocks and explicit tab/control
   hit areas.
-- The release executable has no static `comctl32.dll` import. Slint's optional
-  muda/tray integration is disabled, the backend's no-muda Windows cfg is
-  patched locally, and the hit-test subclass entry points are looked up with
+- The release executable has no static `comctl32.dll` import. Slint's Muda
+  feature is enabled for native popup menus, no system-tray UI is added, and
+  the repository-vendored Muda subclass entry points are looked up with
   `LoadLibraryW`/`GetProcAddress` at runtime. Missing exports degrade to the
   default window procedure instead of preventing startup.
+- Native menu-loop depth is tracked by the existing hit-test subclass through
+  `WM_ENTERMENULOOP`/`WM_EXITMENULOOP`, so fan collapse and delayed hover-open
+  work cannot destroy the item tree while a popup menu is active. The shared
+  tracker has host coverage for nested loops and false popup `wParam` values.
 - Hover routing uses one persistent Slint deck hover ancestor around the
   rest/fan/control content rather than a redundant tab-hover callback and state.
   A narrow DPI-scaled edge bridge overlaps the outer tab edge, keeping direct
@@ -117,6 +124,10 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   screen-edge placement, 200 ms fan collapse timing, and active-display gating
   were corrected. The fan layout and Slint edge geometry share the same
   dimensions.
+- Create New persists and opens an empty note, and Delete followed by Undo
+  restores the note in memory and SQLite. Native hit-test coverage includes
+  both edges, the preview reservation, the toast bounds, hidden-note reveal,
+  and blank-area pass-through.
 - Win32 monitor enumeration, per-monitor DPI awareness, `WM_DPICHANGED`
   refresh routing, borderless tool windows, startup registration, global
   hotkeys, single-instance protection, display watching, fullscreen
@@ -129,18 +140,21 @@ All commands below passed on 2026-09-07:
 ```text
 cargo fmt --manifest-path windows/Cargo.toml --all -- --check
 cargo check --manifest-path windows/Cargo.toml
-cargo test --manifest-path windows/Cargo.toml       # 54 passed, 0 failed
+cargo test --manifest-path windows/Cargo.toml       # 59 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
+cargo tree --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu -e features # muda enabled
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is an 11,360,768-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,456,512-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
-The import-table audit reports no static `comctl32.dll` dependency. This proves
-the GNU target can link a PE artifact and avoids the reported loader failure;
-it does not prove MSVC compatibility or Windows runtime behavior.
+The import-table audit reports no static `comctl32.dll` dependency, while the
+feature graph confirms `muda`, `raw-window-handle-06`, and `renderer-femtovg`.
+This proves the GNU target can link a PE artifact and avoids the reported loader
+failure without disabling native popup menus; it does not prove MSVC
+compatibility or Windows runtime behavior.
 
 The editor save lifecycle now ignores redundant normalized body events, avoids
 writing the editor value back during an unchanged refresh, and refreshes the

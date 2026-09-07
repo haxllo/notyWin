@@ -1,6 +1,7 @@
 use super::{
     DisplayInfo, FocusRestoreOutcome, FocusTarget, HOTKEY_BINDINGS, HitTestMode, HotkeyAction,
     HotkeyBinding, HotkeyRegistration, HotkeyRegistrationOutcome, HotkeyRegistrationStatus,
+    POPUP_MENU_ENTER_MESSAGE, POPUP_MENU_EXIT_MESSAGE, PopupMenuTracker,
 };
 use crate::deck::{PanelGeometry, WorkArea};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -397,6 +398,7 @@ enum WindowLayer {
 struct HitTestState {
     mode: HitTestMode,
     layer: WindowLayer,
+    popup_menu: PopupMenuTracker,
 }
 
 unsafe extern "system" fn hit_test_subclass(
@@ -407,6 +409,14 @@ unsafe extern "system" fn hit_test_subclass(
     _subclass_id: usize,
     reference_data: usize,
 ) -> LRESULT {
+    if message == POPUP_MENU_ENTER_MESSAGE || message == POPUP_MENU_EXIT_MESSAGE {
+        let state = reference_data as *mut HitTestState;
+        if !state.is_null() {
+            unsafe {
+                (*state).popup_menu.observe(message, wparam);
+            }
+        }
+    }
     if message == WM_DPICHANGED {
         request_display_refresh();
     }
@@ -481,7 +491,11 @@ unsafe fn update_window_subclass(hwnd: HWND, mode: HitTestMode, layer: WindowLay
         }
         return;
     }
-    let state = Box::into_raw(Box::new(HitTestState { mode, layer }));
+    let state = Box::into_raw(Box::new(HitTestState {
+        mode,
+        layer,
+        popup_menu: PopupMenuTracker::default(),
+    }));
     if unsafe {
         (api.set_window_subclass)(
             hwnd,
@@ -494,6 +508,33 @@ unsafe fn update_window_subclass(hwnd: HWND, mode: HitTestMode, layer: WindowLay
         unsafe {
             drop(Box::from_raw(state));
         }
+    }
+}
+
+pub fn is_tracking_popup_menu(window: &slint::Window) -> bool {
+    let Some(hwnd) = hwnd_for(window) else {
+        return false;
+    };
+    let Some(api) = comctl_subclass_api() else {
+        return false;
+    };
+    let mut reference_data = 0usize;
+    if unsafe {
+        (api.get_window_subclass)(
+            hwnd,
+            Some(hit_test_subclass),
+            HIT_TEST_SUBCLASS_ID,
+            &mut reference_data,
+        )
+    } == 0
+        || reference_data == 0
+    {
+        return false;
+    }
+    unsafe {
+        (*(reference_data as *const HitTestState))
+            .popup_menu
+            .is_open()
     }
 }
 

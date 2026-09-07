@@ -64,6 +64,10 @@ pub fn apply_window_style(
 
 pub fn update_hit_test(_window: &slint::Window, _hit_test: HitTestMode) {}
 
+pub fn is_tracking_popup_menu(_window: &slint::Window) -> bool {
+    false
+}
+
 pub fn centre_window(window: &slint::Window, width: u32, height: u32, _display_id: u64) {
     window.set_size(slint::PhysicalSize::new(width, height));
 }

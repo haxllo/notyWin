@@ -55,11 +55,12 @@ change is not guaranteed to emit a display notification. The non-Windows module
 supplies one test display and leaves native styling untouched.
 
 The Slint winit backend is configured directly rather than through the default
-backend selector, because this app does not use a system tray or native menu.
-That keeps the optional muda/comctl32 integration out of the import table. The
-vendored backend contains the upstream no-muda Windows cfg correction required
-by Slint 1.17.1; the edge subclass APIs used for hit testing are loaded with
-`GetProcAddress` when the app starts. The foreground timer still checks for
+backend selector, with its `muda` feature enabled for native popup menus. The
+app does not add a system-tray UI. The vendored backend keeps the repository's
+Slint 1.17.1 Windows compatibility patch, and the repository-vendored Muda
+0.19.3 keeps its native popup implementation while loading subclass APIs with
+`GetProcAddress` so they do not become static `comctl32.dll` imports. The
+foreground timer still checks for
 external focus when expanded content must dismiss, but display/fullscreen
 reconciliation refreshes the UI only when its display or fullscreen snapshot
 changes; the initial fullscreen snapshot is taken before that timer starts.
@@ -83,6 +84,12 @@ hit-test regions are refreshed when a preview appears or hides on a secondary
 monitor as well as the primary one. The preview callback updates only that
 window’s native hit-test state; it does not rebuild note models or reconfigure
 unrelated display windows during pointer movement.
+
+Fan context menus use Slint's native Muda backend. The Win32 hit-test subclass
+records `WM_ENTERMENULOOP` and `WM_EXITMENULOOP` depth, including popup menus
+whose `wParam` is false, so hover-collapse timers and delayed hover-open actions
+cannot replace the fan item tree while a menu is tracking. Menu actions still
+dispatch through the existing Slint callbacks after the native loop exits.
 
 The window is frameless, a tool window, excluded from Alt-Tab, and configured
 not to activate while it is only a pill/fan. The editor requests activation

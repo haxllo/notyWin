@@ -11,9 +11,11 @@ expanded note grows out of its selected tab.
 ## Current implementation
 
 - Rust 2024 Cargo project with Slint UI compiled at build time.
-- Direct Slint winit backend with the optional tray/menu integration disabled;
-  the pinned backend compatibility patch keeps comctl32 subclass exports out of
-  the executable import table.
+- Direct Slint winit backend with native Muda popup menus enabled for fan
+  context actions; no system-tray UI is added. Muda 0.19.3 is vendored with a
+  small runtime-loader patch, and the pinned backend compatibility patch plus
+  runtime-loaded subclass APIs keep static comctl32 subclass exports out of the
+  executable import table.
 - Explicit note model and SQLite persistence with encrypted note bodies.
 - Rest, fan, and expanded deck states with shingled tabs and colour chips.
 - Fan tabs, `+N`, and settings controls terminate at the outward monitor edge;
@@ -45,10 +47,11 @@ stock text input is a rich Markdown editor.
 
 ## Verification boundary
 
-The repository currently verifies formatting, host compilation, 54 host unit
-tests, a GNU Windows-target type check, and a GNU release import-table audit.
-A real Windows 10/11 x64 session is still required to validate MSVC linking,
-Win32 activation and hit testing, global hotkeys, DPAPI, mixed-DPI monitors,
+The repository currently verifies formatting, host compilation, 59 host unit
+tests, a GNU Windows-target type check, the enabled Muda feature graph, and a
+GNU release import-table audit of the vendored Muda build. A real Windows
+10/11 x64 session is still required to validate MSVC linking, Win32 activation
+and hit testing, native popup lifetime and dispatch, global hotkeys, DPAPI, mixed-DPI monitors,
 fullscreen suppression, and visual fidelity. The project is therefore not
 described as runtime-verified until those checks have been run on Windows.
 

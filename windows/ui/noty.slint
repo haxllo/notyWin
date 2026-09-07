@@ -164,6 +164,7 @@ export component NotyWindow inherits Window {
 
     callback deck-hovered(bool);
     callback preview-changed(string);
+    callback hover-open-note(string);
     callback display-changed();
     callback escape-pressed();
     callback back-to-deck();
@@ -250,7 +251,7 @@ export component NotyWindow inherits Window {
             && root.deck-state == "fan" && root.hovered-note-id != "";
         triggered => {
             if (root.hovered-note-id != "") {
-                root.note-clicked(root.hovered-note-id);
+                root.hover-open-note(root.hovered-note-id);
             }
         }
     }
