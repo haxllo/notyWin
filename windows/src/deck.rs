@@ -93,7 +93,7 @@ fn fan_layout(
     deck_scale: f32,
     display_scale: f32,
     show_all: bool,
-    preview_visible: bool,
+    preview_space_reserved: bool,
 ) -> FanLayout {
     let deck_pixels = |value| physical_pixels(value, deck_scale * display_scale);
     let display_pixels = |value| physical_pixels(value, display_scale);
@@ -114,7 +114,7 @@ fn fan_layout(
         .max(control_size)
         .saturating_add(edge_margin.saturating_mul(2))
         .max(display_pixels(50.0));
-    let preview_space = if preview_visible {
+    let preview_space = if preview_space_reserved {
         deck_pixels(220.0)
     } else {
         0
@@ -219,7 +219,7 @@ pub fn geometry_with_activation_and_visibility_and_preview(
     note_count: usize,
     edge_activation: f32,
     show_all: bool,
-    preview_visible: bool,
+    preview_space_reserved: bool,
 ) -> PanelGeometry {
     geometry_with_activation_inner(
         work,
@@ -233,7 +233,7 @@ pub fn geometry_with_activation_and_visibility_and_preview(
         note_count,
         edge_activation,
         show_all,
-        preview_visible,
+        preview_space_reserved,
     )
 }
 
@@ -277,7 +277,7 @@ fn geometry_with_activation_inner(
     note_count: usize,
     edge_activation: f32,
     show_all: bool,
-    preview_visible: bool,
+    preview_space_reserved: bool,
 ) -> PanelGeometry {
     let deck_scale = scale.clamp(0.7, 1.8);
     let display_scale = work.logical_scale();
@@ -298,7 +298,7 @@ fn geometry_with_activation_inner(
                 deck_scale,
                 display_scale,
                 show_all,
-                preview_visible,
+                preview_space_reserved,
             );
             (layout.width, layout.height.min(work.height.max(1)))
         }
@@ -506,41 +506,43 @@ mod tests {
     }
 
     #[test]
-    fn fan_preview_reserves_card_and_gap_width_only_when_visible() {
+    fn fan_preview_space_can_be_reserved_before_hover() {
         let work = area();
-        let hidden = geometry_with_activation_and_visibility_and_preview(
-            work,
-            DeckState::Fan,
-            false,
-            1.0,
-            0.5,
-            DeckStyle::LabelledTabs,
-            720,
-            580,
-            2,
-            20.0,
-            false,
-            false,
-        );
-        let visible = geometry_with_activation_and_visibility_and_preview(
-            work,
-            DeckState::Fan,
-            false,
-            1.0,
-            0.5,
-            DeckStyle::LabelledTabs,
-            720,
-            580,
-            2,
-            20.0,
-            false,
-            true,
-        );
-
+        let panel = |on_left_edge, preview_space_reserved| {
+            geometry_with_activation_and_visibility_and_preview(
+                work,
+                DeckState::Fan,
+                on_left_edge,
+                1.0,
+                0.5,
+                DeckStyle::LabelledTabs,
+                720,
+                580,
+                2,
+                20.0,
+                false,
+                preview_space_reserved,
+            )
+        };
         let preview_space = (220.0 * work.logical_scale()).round() as u32;
-        assert_eq!(visible.width - hidden.width, preview_space);
-        assert_eq!(hidden.x - visible.x, preview_space as i32);
-        assert_eq!(visible.x + visible.width as i32, work.x + work.width as i32);
+
+        for on_left_edge in [true, false] {
+            let base = panel(on_left_edge, false);
+            let reserved = panel(on_left_edge, true);
+
+            assert_eq!(reserved.width - base.width, preview_space);
+            if on_left_edge {
+                assert_eq!(base.x, work.x);
+                assert_eq!(reserved.x, work.x);
+            } else {
+                assert_eq!(base.x - reserved.x, preview_space as i32);
+                assert_eq!(
+                    reserved.x + reserved.width as i32,
+                    work.x + work.width as i32
+                );
+            }
+            assert_eq!(panel(on_left_edge, true), reserved);
+        }
     }
 
     #[test]

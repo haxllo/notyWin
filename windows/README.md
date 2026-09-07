@@ -18,7 +18,10 @@ expanded note grows out of its selected tab.
 - Rest, fan, and expanded deck states with shingled tabs and colour chips.
 - A persistent deck hover surface with a DPI-scaled native edge bridge, so
   direct and diagonal pill-to-tab handoffs retain click delivery without
-  claiming that blank fan pixels are interactive.
+  claiming that blank fan pixels are interactive. Optional preview width is
+  reserved when the fan opens, so hovering a tab does not move the edge panel.
+- Fan tabs, preview cards, and expanded note surfaces round only their left
+  corners; the edge-facing right corners remain square.
 - Autosaving editor, inline task markers, archive/delete/undo, library search,
   settings, and an inline case-insensitive `Ctrl+F` Find bar with wraparound
   selection.
@@ -39,7 +42,7 @@ stock text input is a rich Markdown editor.
 
 ## Verification boundary
 
-The repository currently verifies formatting, host compilation, 53 host unit
+The repository currently verifies formatting, host compilation, 54 host unit
 tests, a GNU Windows-target type check, and a GNU release import-table audit.
 A real Windows 10/11 x64 session is still required to validate MSVC linking,
 Win32 activation and hit testing, global hotkeys, DPAPI, mixed-DPI monitors,
@@ -48,16 +51,22 @@ described as runtime-verified until those checks have been run on Windows.
 
 Editor autosave coalesces only actual body changes, ignores redundant values
 fed back during UI refresh, and refreshes the visible status after each
-debounced persistence attempt. Failed writes remain queued for retry. The
-host tests cover this lifecycle; SQLite/encryption errors and the Slint timer
+debounced persistence attempt. Failed writes remain queued for retry. Note
+writes use a transaction that updates by note ID and inserts only when the row
+does not exist, so migrated tables without a matching SQLite uniqueness
+constraint do not fail on `ON CONFLICT(id)`. The host tests cover this
+lifecycle and legacy schema path; SQLite/encryption errors and the Slint timer
 event path still require real Windows runtime validation.
 
 The current interaction model opens a fan tab by click, can show a delayed
 preview card on hover, and can optionally open the note after a longer hover.
-The host suite covers the pill-to-tab handoff, including diagonal entry, while
-the native hit-test path returns `HTCLIENT` for accepted regions,
-`HTTRANSPARENT` for blank fan pixels, and `MA_NOACTIVATE` for the nonactivating
-tool window. These checks do not replace real Windows runtime validation.
+Preview space is part of the fan frame before hover, so the native edge
+position stays fixed while the card appears. The host suite covers the
+pre-reserved and hovered geometry as well as the pill-to-tab handoff, including
+diagonal entry, while the native hit-test path returns `HTCLIENT` for accepted
+regions, `HTTRANSPARENT` for blank fan pixels, and `MA_NOACTIVATE` for the
+nonactivating tool window. These checks do not replace real Windows runtime
+validation.
 
 ### Known UX gaps
 

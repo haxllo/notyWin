@@ -76,9 +76,13 @@ optional delayed hover-to-open action, alongside staggered Slint movement
 animations. A persistent Slint deck hover ancestor plus a DPI-scaled native
 edge bridge keeps direct and diagonal pill-to-tab handoffs connected; accepted
 regions use `HTCLIENT`, blank fan areas use `HTTRANSPARENT`, and the
-nonactivating window uses `MA_NOACTIVATE`. The handoff, preview geometry, and
-preview edge-region cases have host coverage, but transformed-tab coordinates,
-DPI edge cases, and pass-through behavior still need real Windows verification.
+nonactivating window uses `MA_NOACTIVATE`. Preview width is reserved when the
+fan opens, so the native edge position is identical before and during a hover
+preview. Fan tabs, preview cards, and the expanded note round only their left
+corners and keep their right corners square. The handoff, reserved/hovered
+preview geometry, and preview edge-region cases have host coverage, but
+transformed-tab coordinates, DPI edge cases, and pass-through behavior still
+need real Windows verification.
 
 Remaining UX gaps are fan drag reordering, direct interaction with notes hidden
 behind `+N` (which currently opens Library), and rich span-level Markdown
@@ -86,6 +90,9 @@ editing. Settings parity is also incomplete for shortcut customization, note
 typography/size, edge activation, and per-note text direction. The expanded
 note exposes `Saving…`, `Saved`, and `Couldn’t save` states; body writes are
 debounced, unchanged editor values are ignored, and failed writes remain
-retryable. The status lifecycle still requires real Windows runtime validation.
+retryable. Existing notes are persisted with a transactional update-by-ID path
+that falls back to insert for new rows, including migrated tables without an
+`id` uniqueness constraint. The status lifecycle still requires real Windows
+runtime validation.
 Screenshot-level typography, icon, and shadow comparison likewise requires
 fresh Windows captures rather than the host unit-test environment.

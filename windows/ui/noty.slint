@@ -446,7 +446,10 @@ export component NotyWindow inherits Window {
                         y: fan-top + index * fan-item-pitch;
                         width: fan-item-width;
                         height: fan-item-height;
-                        border-radius: deck-style == "tabs" ? 12px : 8px;
+                        border-top-left-radius: deck-style == "tabs" ? 12px : 8px;
+                        border-bottom-left-radius: deck-style == "tabs" ? 12px : 8px;
+                        border-top-right-radius: 0px;
+                        border-bottom-right-radius: 0px;
                         background: note.paper;
                         opacity: 1.0;
                         transform-rotation: deck-style == "tabs" ? (left-edge ? 3deg : -3deg) : 0deg;
@@ -560,7 +563,10 @@ export component NotyWindow inherits Window {
                 y: preview-y;
                 width: preview-width;
                 height: preview-height;
-                border-radius: 8px;
+                border-top-left-radius: 8px;
+                border-bottom-left-radius: 8px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
                 background: note.paper;
                 border-width: 1px;
                 border-color: note.ink.with-alpha(0.12);
@@ -632,10 +638,14 @@ export component NotyWindow inherits Window {
             Rectangle {
                 x: left-edge ? tab-width : 0px; y: 0px;
                 width: root.width - tab-width; height: root.height;
-                border-radius: 14px;
+                border-top-left-radius: 14px;
+                border-bottom-left-radius: 14px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
                 background: expanded-note.paper;
                 border-width: 1px;
                 border-color: expanded-note.ink.with-alpha(0.12);
+                clip: true;
 
                 Rectangle {
                     x: 0px; y: 0px; width: parent.width; height: 62px;

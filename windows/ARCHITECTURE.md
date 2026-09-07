@@ -68,10 +68,13 @@ changes; the initial fullscreen snapshot is taken before that timer starts.
 
 One Slint window is maintained per selected display. Rest uses a narrow panel
 whose origin is exactly on the selected edge. Fan increases the panel width to
-the tab width. Expanded grows the panel toward the screen interior while the
-selected tab remains the gutter. `SetWindowPos` is used on Windows so the
-physical pixel frame is updated atomically instead of approximating an edge
-with margins.
+the tab width and, when delayed previews are enabled, reserves the preview
+card and gap before any tab is hovered. Expanded grows the panel toward the
+screen interior while the selected tab remains the gutter. `SetWindowPos` is
+used on Windows so the physical pixel frame is updated atomically instead of
+approximating an edge with margins. Because the reserved fan frame is already
+at its preview width, changing hover visibility does not change its edge
+position.
 
 The window is frameless, a tool window, excluded from Alt-Tab, and configured
 not to activate while it is only a pill/fan. The editor requests activation
@@ -93,6 +96,9 @@ key is protected with DPAPI before it is stored beside the database. Legacy
 plaintext key files are accepted for migration and rewritten in protected
 form. A corrupt database is quarantined, while an unreadable body remains
 recoverable metadata and is not overwritten until the body is replaced.
+Note saves run in one transaction: an `UPDATE ... WHERE id` handles existing
+rows, and a fallback `INSERT` handles new rows without requiring the exact
+primary-key/unique constraint needed by SQLite's `ON CONFLICT(id)` syntax.
 Settings are a small versioned JSON file, and the deleted Windows prototype's
 data is copied into the new directory without mutating the source. There is no
 account, telemetry, cloud sync, or required network service.

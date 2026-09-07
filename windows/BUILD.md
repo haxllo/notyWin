@@ -115,7 +115,7 @@ cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-wind
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe
 ```
 
-The current audit produces an 11,296,256-byte PE32+ x64 executable with no
+The current audit produces an 11,360,768-byte PE32+ x64 executable with no
 static `comctl32.dll` import. This confirms GNU linking and the import-table
 constraint only; it is not a substitute for the MSVC build or Windows runtime
 checks above.

@@ -1678,6 +1678,13 @@ impl Controller {
                     None
                 };
             let preview_visible = preview_note_index.is_some();
+            // Keep hover from moving the native fan window under the pointer.
+            let preview_space_reserved = preview_visible
+                || (is_active
+                    && local_view == View::Deck
+                    && local_deck_state == DeckState::Fan
+                    && settings.tab_preview
+                    && !settings.open_on_hover);
             let hidden_count = if local_view == View::Deck && local_deck_state == DeckState::Rest {
                 active_notes.len().saturating_sub(MAX_PILL_DASHES)
             } else if local_view == View::Deck
@@ -1702,7 +1709,7 @@ impl Controller {
                         active_notes.len(),
                         settings.edge_activation,
                         fan_show_all && local_deck_state == DeckState::Fan,
-                        preview_visible,
+                        preview_space_reserved,
                     ),
                 )
             } else {

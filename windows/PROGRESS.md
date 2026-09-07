@@ -98,8 +98,11 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 - Fan tabs can show a delayed 180 ms preview card when `tab_preview` is enabled.
   The card includes the note title, task progress, pin state, and a body
   snippet; a 150 ms handoff grace period keeps it reachable while the pointer
-  moves from a tab into the card. Preview visibility expands the native fan
-  geometry and hit-test regions on either edge without claiming the blank gap.
+  moves from a tab into the card. Preview width is reserved when the fan opens,
+  so preview visibility changes the painted card and hit-test regions on either
+  edge without moving the native fan or claiming the blank gap. Fan tabs,
+  preview cards, and expanded note surfaces explicitly round only their left
+  corners and clip expanded content to that boundary.
   `open_on_hover` suppresses the preview and retains its 450 ms note-opening
   behavior.
   Repeated hover events do not restart an active collapse timer; pill-to-fan,
@@ -121,14 +124,14 @@ All commands below passed on 2026-09-07:
 ```text
 cargo fmt --manifest-path windows/Cargo.toml --all -- --check
 cargo check --manifest-path windows/Cargo.toml
-cargo test --manifest-path windows/Cargo.toml       # 53 passed, 0 failed
+cargo test --manifest-path windows/Cargo.toml       # 54 passed, 0 failed
 cargo check --manifest-path windows/Cargo.toml --target x86_64-pc-windows-gnu
 git diff --check
 cargo build --manifest-path windows/Cargo.toml --release --target x86_64-pc-windows-gnu
 objdump -p windows/target/x86_64-pc-windows-gnu/release/noty-win.exe # no comctl32.dll import
 ```
 
-The current GNU release artifact is an 11,358,720-byte stripped PE32+ x64 GUI
+The current GNU release artifact is an 11,360,768-byte stripped PE32+ x64 GUI
 executable at `windows/target/x86_64-pc-windows-gnu/release/noty-win.exe`.
 The import-table audit reports no static `comctl32.dll` dependency. This proves
 the GNU target can link a PE artifact and avoids the reported loader failure;
@@ -138,9 +141,10 @@ The editor save lifecycle now ignores redundant normalized body events, avoids
 writing the editor value back during an unchanged refresh, and refreshes the
 visible `Saved`/`Couldn’t save` status after each debounced flush. Failed body
 IDs remain queued for retry. Host regressions cover unchanged events,
-successful coalesced saves, and retryable failures; the Slint timer callback,
-SQLite, encryption, and status behavior still need authoritative Windows
-runtime validation.
+successful coalesced saves, retryable failures, and editing a legacy table
+without an `id` uniqueness constraint. The Slint timer callback, SQLite,
+encryption, and status behavior still need authoritative Windows runtime
+validation.
 
 ## Known limitations and open verification
 

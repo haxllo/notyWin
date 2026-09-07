@@ -176,18 +176,14 @@ impl Store {
 
     pub fn save_note(&mut self, note: &Note) -> StoreResult<()> {
         let sealed = self.body_blob(note)?;
-        self.connection.execute(
-            "INSERT INTO notes
-                (id, title, body, colour, created_at, modified_at, archived,
-                 pinned, sort_order, direction)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-             ON CONFLICT(id) DO UPDATE SET
-                title=excluded.title, body=excluded.body, colour=excluded.colour,
-                modified_at=excluded.modified_at, archived=excluded.archived,
-                pinned=excluded.pinned, sort_order=excluded.sort_order,
-                direction=excluded.direction",
+        let transaction = self.connection.transaction()?;
+        let updated = transaction.execute(
+            "UPDATE notes SET
+                title = ?1, body = ?2, colour = ?3, created_at = ?4,
+                modified_at = ?5, archived = ?6, pinned = ?7, sort_order = ?8,
+                direction = ?9
+             WHERE id = ?10",
             params![
-                note.id,
                 note.title,
                 sealed,
                 note.colour as i64,
@@ -197,8 +193,30 @@ impl Store {
                 note.pinned as i64,
                 note.order,
                 direction_name(note.direction),
+                note.id,
             ],
         )?;
+        if updated == 0 {
+            transaction.execute(
+                "INSERT INTO notes
+                    (id, title, body, colour, created_at, modified_at, archived,
+                     pinned, sort_order, direction)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    note.id,
+                    note.title,
+                    sealed,
+                    note.colour as i64,
+                    note.created_at,
+                    note.modified_at,
+                    note.archived as i64,
+                    note.pinned as i64,
+                    note.order,
+                    direction_name(note.direction),
+                ],
+            )?;
+        }
+        transaction.commit()?;
         if !note.body_unreadable {
             self.unreadable_bodies.remove(&note.id);
         }
@@ -883,6 +901,43 @@ mod tests {
         let loaded = store.load_notes().unwrap();
         assert_eq!(loaded[0].body, "private body");
         assert_ne!(loaded[0].body.as_bytes(), b"");
+    }
+
+    #[test]
+    fn legacy_table_without_id_constraint_still_supports_edits() {
+        let directory =
+            std::env::temp_dir().join(format!("noty-legacy-save-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("note.key"), [7_u8; 32]).unwrap();
+        Connection::open(directory.join("notes.db"))
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE notes (
+                    id TEXT NOT NULL,
+                    title TEXT NOT NULL DEFAULT '',
+                    body BLOB NOT NULL,
+                    colour INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    modified_at INTEGER NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0,
+                    pinned INTEGER NOT NULL DEFAULT 0,
+                    sort_order REAL NOT NULL DEFAULT 0,
+                    direction TEXT NOT NULL DEFAULT 'automatic'
+                );",
+            )
+            .unwrap();
+
+        let mut store = Store::open(&directory).unwrap();
+        let mut note = Note::new("first", 0, 0.0);
+        store.save_note(&note).unwrap();
+        note.update_body("second");
+        store.save_note(&note).unwrap();
+
+        let loaded = store.load_notes().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].body, "second");
+        drop(store);
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]
