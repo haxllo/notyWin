@@ -90,7 +90,8 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
 - Hover routing uses Slint fan/pill surfaces and a fan-wide region rather than a
   conflicting Win32 polling bridge. A narrow DPI-scaled edge bridge overlaps the
   outer tab edge, keeping diagonal pill-to-tab moves connected while blank fan
-  pixels remain pass-through.
+  pixels remain pass-through. Tab hover cancellation does not rebuild the Slint
+  models, so entering a tab cannot consume its click gesture.
   Repeated hover events do not restart an active collapse timer; pill-to-fan,
   transformed-tab, edge-control, and blank fan hit-test cases have host
   coverage.

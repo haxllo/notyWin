@@ -330,6 +330,18 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
+            ui.on_tab_hovered(move || {
+                if let Some(controller) = weak.upgrade() {
+                    let display_id = weak_ui
+                        .upgrade()
+                        .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
+                    controller.borrow_mut().handle_deck_hover(true, display_id);
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
             ui.on_display_changed(move || {
                 if let Some(controller) = weak.upgrade() {
                     Controller::sync_displays(&controller);
@@ -719,6 +731,18 @@ impl Controller {
                     Controller::dispatch(&controller, |controller| {
                         controller.handle_deck_hover(inside, display_id);
                     });
+                }
+            });
+        }
+        {
+            let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
+            ui.on_tab_hovered(move || {
+                if let Some(controller) = weak.upgrade() {
+                    let display_id = weak_ui
+                        .upgrade()
+                        .and_then(|ui| ui.get_display_id().parse::<u64>().ok());
+                    controller.borrow_mut().handle_deck_hover(true, display_id);
                 }
             });
         }

@@ -154,6 +154,7 @@ export component NotyWindow inherits Window {
     in property <string> display-target: "all";
 
     callback deck-hovered(bool);
+    callback tab-hovered();
     callback display-changed();
     callback escape-pressed();
     callback back-to-deck();
@@ -379,7 +380,7 @@ export component NotyWindow inherits Window {
                 TouchArea {
                     changed has-hover => {
                         if self.has-hover {
-                            root.deck-hovered(true);
+                            root.tab-hovered();
                         }
                     }
                     clicked => { root.note-clicked(note.id); }
