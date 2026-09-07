@@ -281,6 +281,14 @@ pub fn apply_window_style(
     }
 }
 
+pub fn update_hit_test(window: &slint::Window, hit_test: HitTestMode) {
+    if let Some(hwnd) = hwnd_for(window) {
+        unsafe {
+            update_window_subclass(hwnd, hit_test, WindowLayer::Deck);
+        }
+    }
+}
+
 unsafe fn apply_window_style_to_hwnd(
     hwnd: HWND,
     frame: Option<PanelGeometry>,

@@ -95,7 +95,7 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   return `HTTRANSPARENT`, and the nonactivating tool window returns
   `MA_NOACTIVATE`. Entering a tab does not rebuild the Slint models, so it
   cannot consume its click gesture.
-- Fan tabs can show a delayed 180 ms preview card when `tab_preview` is enabled.
+- Fan tabs show a preview card immediately on tab entry when `tab_preview` is enabled.
   The card includes the note title, task progress, pin state, and a body
   snippet; a 150 ms handoff grace period keeps it reachable while the pointer
   moves from a tab into the card. Preview width is reserved when the fan opens,
@@ -106,7 +106,8 @@ multi-monitor/DPI behavior, fullscreen suppression, and low idle CPU usage.
   Fan tabs, `+N`, new-note, and settings controls are flush with the outward
   monitor edge while retaining the interior gutter.
   Each per-display window refreshes its native preview hit-test regions when
-  its own delayed preview appears or hides.
+  its own preview appears or hides without rebuilding the Slint note model or
+  reconfiguring unrelated display windows.
   `open_on_hover` suppresses the preview and retains its 450 ms note-opening
   behavior.
   Repeated hover events do not restart an active collapse timer; pill-to-fan,
@@ -168,9 +169,8 @@ following must not be described as verified until tested on Windows:
 - fresh Windows screenshots for rest, fan, expanded note, library, settings,
   and Quick Capture. Repository screenshots are historical references only.
 
-Known fidelity follow-ups are fan drag reordering, direct interaction with
-notes hidden behind `+N` (the indicator currently opens Library), rich editable
-Markdown spans, incomplete Windows settings parity, and Windows
+Known fidelity follow-ups are fan drag reordering, rich editable Markdown spans,
+incomplete Windows settings parity, and Windows
 screenshot-level typography/icon/shadow comparison. Settings parity
 gaps include shortcut customization, note typography/size, edge activation,
 and per-note text direction. Static follow-ups also include stronger note-ID associated data for

@@ -71,7 +71,7 @@ The preview is intentionally not described as rich editable Markdown.
 
 ## Current fidelity boundary
 
-The fan uses click-to-open tabs, an optional delayed hover preview, and an
+The fan uses click-to-open tabs, an optional immediate-on-hover preview, and an
 optional delayed hover-to-open action, alongside staggered Slint movement
 animations. A persistent Slint deck hover ancestor plus a DPI-scaled native
 edge bridge keeps direct and diagonal pill-to-tab handoffs connected; accepted
@@ -79,17 +79,19 @@ regions use `HTCLIENT`, blank fan areas use `HTTRANSPARENT`, and the
 nonactivating window uses `MA_NOACTIVATE`. Preview width is reserved when the
 fan opens, so the native edge position is identical before and during a hover
 preview. Fan tabs, preview cards, and the expanded note round only their left
-corners and keep their right corners square. The handoff, reserved/hovered
-preview geometry, and preview edge-region cases have host coverage, but
+corners and keep their right corners square. Preview changes update only the
+affected window’s native hit-test regions and do not rebuild the note models or
+resize every display window. The handoff, reserved/hovered preview geometry,
+and preview edge-region cases have host coverage, but
 transformed-tab coordinates, DPI edge cases, and pass-through behavior still
 need real Windows verification.
 Fan tabs, `+N`, and the settings/new-note controls are flush with the outward
 monitor edge; the 12 pt gutter is retained on the interior side of the fan.
 
-Remaining UX gaps are fan drag reordering, direct interaction with notes hidden
-behind `+N` (which currently opens Library), and rich span-level Markdown
-editing. Settings parity is also incomplete for shortcut customization, note
-typography/size, edge activation, and per-note text direction. The expanded
+Remaining UX gaps are fan drag reordering and rich span-level Markdown editing;
+`+N` now reveals hidden notes in-place for direct interaction. Settings parity
+is also incomplete for shortcut customization, note typography/size, edge
+activation, and per-note text direction. The expanded
 note exposes `Saving…`, `Saved`, and `Couldn’t save` states; body writes are
 debounced, unchanged editor values are ignored, and failed writes remain
 retryable. Existing notes are persisted with a transactional update-by-ID path

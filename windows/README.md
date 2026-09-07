@@ -61,21 +61,22 @@ constraint do not fail on `ON CONFLICT(id)`. The host tests cover this
 lifecycle and legacy schema path; SQLite/encryption errors and the Slint timer
 event path still require real Windows runtime validation.
 
-The current interaction model opens a fan tab by click, can show a delayed
-preview card on hover, and can optionally open the note after a longer hover.
-Preview space is part of the fan frame before hover, so the native edge
-position stays fixed while the card appears. The host suite covers the
-pre-reserved and hovered geometry as well as the pill-to-tab handoff, including
-diagonal entry, while the native hit-test path returns `HTCLIENT` for accepted
-regions, `HTTRANSPARENT` for blank fan pixels, and `MA_NOACTIVATE` for the
-nonactivating tool window. These checks do not replace real Windows runtime
-validation.
+The current interaction model opens a fan tab by click, shows its preview card
+immediately on hover when enabled, and can optionally open the note after a
+longer hover. Preview space is part of the fan frame before hover, so the
+native edge position stays fixed while the card appears. Preview changes update
+only the native hit-test subclass instead of rebuilding every Slint model and
+window, avoiding hover stutters. The host suite covers the pre-reserved and
+hovered geometry as well as the pill-to-tab handoff, including diagonal entry,
+while the native hit-test path returns `HTCLIENT` for accepted regions,
+`HTTRANSPARENT` for blank fan pixels, and `MA_NOACTIVATE` for the nonactivating
+tool window. These checks do not replace real Windows runtime validation.
 
 ### Known UX gaps
 
 - Fan drag reordering is not implemented.
-- The `+N` indicator opens Library rather than exposing the hidden notes for
-  direct interaction in the fan.
+- The `+N` indicator now reveals hidden notes in-place for direct interaction;
+  drag reordering of the revealed fan is still not implemented.
 - Markdown editing is plain text with a separate styled preview, not rich
   span-level editing.
 - Settings parity is incomplete: shortcut customization, note typography/size,

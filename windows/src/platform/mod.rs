@@ -241,6 +241,10 @@ pub fn apply_window_style(
     implementation::apply_window_style(window, activate, show_over_fullscreen, hit_test);
 }
 
+pub fn update_hit_test(window: &slint::Window, hit_test: HitTestMode) {
+    implementation::update_hit_test(window, hit_test);
+}
+
 pub fn centre_window(window: &slint::Window, width: u32, height: u32, display_id: u64) {
     implementation::centre_window(window, width, height, display_id);
 }

@@ -68,7 +68,7 @@ changes; the initial fullscreen snapshot is taken before that timer starts.
 
 One Slint window is maintained per selected display. Rest uses a narrow panel
 whose origin is exactly on the selected edge. Fan increases the panel width to
-the tab width and, when delayed previews are enabled, reserves the preview
+the tab width and, when previews are enabled, reserves the preview
 card and gap before any tab is hovered. Expanded grows the panel toward the
 screen interior while the selected tab remains the gutter. `SetWindowPos` is
 used on Windows so the physical pixel frame is updated atomically instead of
@@ -80,7 +80,9 @@ outward-facing monitor edge; the single interior gutter is retained for the
 panel’s breathing room.
 Each display window subscribes to its own preview changes so the native
 hit-test regions are refreshed when a preview appears or hides on a secondary
-monitor as well as the primary one.
+monitor as well as the primary one. The preview callback updates only that
+window’s native hit-test state; it does not rebuild note models or reconfigure
+unrelated display windows during pointer movement.
 
 The window is frameless, a tool window, excluded from Alt-Tab, and configured
 not to activate while it is only a pill/fan. The editor requests activation

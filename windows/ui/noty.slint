@@ -255,19 +255,6 @@ export component NotyWindow inherits Window {
         }
     }
 
-    hover-preview-timer := Timer {
-        interval: 180ms;
-        running: root.tab-preview && !root.open-on-hover && root.view == "deck"
-            && root.deck-state == "fan" && root.hovered-note-id != ""
-            && root.preview-note-id != root.hovered-note-id;
-        triggered => {
-            if (root.hovered-note-id != "" && root.hovered-note-index >= 0) {
-                root.preview-note-id = root.hovered-note-id;
-                root.preview-note-index = root.hovered-note-index;
-            }
-        }
-    }
-
     hover-preview-hide-timer := Timer {
         interval: 150ms;
         running: root.preview-note-id != "" && !root.preview-card-hovered
@@ -452,6 +439,11 @@ export component NotyWindow inherits Window {
                         border-bottom-right-radius: 0px;
                         background: note.paper;
                         opacity: 1.0;
+                        // Pin the outward top corner so rotation cannot leave a screen-edge gap.
+                        transform-origin: {
+                            x: !left-edge && deck-style == "tabs" ? fan-item-width : fan-item-width / 2,
+                            y: !left-edge && deck-style == "tabs" ? 0px : fan-item-height / 2
+                        };
                         transform-rotation: deck-style == "tabs" ? (left-edge ? 3deg : -3deg) : 0deg;
                         animate y { duration: 220ms; delay: index * 42ms; easing: ease-out; }
 
@@ -498,6 +490,11 @@ export component NotyWindow inherits Window {
                                 if (self.has-hover) {
                                     root.hovered-note-id = note.id;
                                     root.hovered-note-index = index;
+                                    if (root.tab-preview && !root.open-on-hover
+                                            && root.view == "deck" && root.deck-state == "fan") {
+                                        root.preview-note-id = note.id;
+                                        root.preview-note-index = index;
+                                    }
                                 } else if (root.hovered-note-id == note.id) {
                                     root.hovered-note-id = "";
                                     root.hovered-note-index = -1;

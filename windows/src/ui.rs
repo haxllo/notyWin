@@ -357,9 +357,10 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
             ui.on_preview_changed(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    Controller::refresh(&controller);
+                if let (Some(controller), Some(ui)) = (weak.upgrade(), weak_ui.upgrade()) {
+                    Controller::refresh_preview(&controller, &ui);
                 }
             });
         }
@@ -776,9 +777,10 @@ impl Controller {
         }
         {
             let weak = weak_controller.clone();
+            let weak_ui = ui.as_weak();
             ui.on_preview_changed(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    Controller::refresh(&controller);
+                if let (Some(controller), Some(ui)) = (weak.upgrade(), weak_ui.upgrade()) {
+                    Controller::refresh_preview(&controller, &ui);
                 }
             });
         }
@@ -1865,6 +1867,99 @@ impl Controller {
                 platform::activate_window(&ui.window());
             }
         }
+    }
+
+    fn refresh_preview(controller: &Rc<RefCell<Self>>, ui: &NotyWindow) {
+        let Ok(display_id) = ui.get_display_id().parse::<u64>() else {
+            return;
+        };
+        let (display, fan_show_all, settings, active_notes, pending_delete) = {
+            let controller = controller.borrow();
+            let Some(display) = controller
+                .state
+                .displays
+                .iter()
+                .find(|display| display.id == display_id)
+                .cloned()
+            else {
+                return;
+            };
+            if controller.state.active_display_id != Some(display_id)
+                || controller.state.view != View::Deck
+                || controller.state.deck_state != DeckState::Fan
+            {
+                return;
+            }
+            (
+                display,
+                controller.state.fan_show_all,
+                controller.state.settings.clone(),
+                controller.state.active_notes(),
+                !controller.state.pending_deletes.is_empty(),
+            )
+        };
+
+        let limit = if fan_show_all {
+            active_notes.len()
+        } else {
+            MAX_VISIBLE_TABS
+        };
+        let local_notes = active_notes.iter().take(limit).cloned().collect::<Vec<_>>();
+        let preview_note_id = ui.get_preview_note_id().to_string();
+        let preview_note_index = local_notes
+            .iter()
+            .position(|note| note.id == preview_note_id);
+        let preview_visible = preview_note_index.is_some();
+        let preview_space_reserved =
+            preview_visible || (settings.tab_preview && !settings.open_on_hover);
+        let mut frame = crate::deck::geometry_with_activation_and_visibility_and_preview(
+            display.work_area,
+            DeckState::Fan,
+            settings.deck_on_left_edge,
+            settings.deck_scale,
+            settings.deck_y_ratio,
+            settings.deck_style,
+            settings.note_width as u32,
+            settings.note_height as u32,
+            active_notes.len(),
+            settings.edge_activation,
+            fan_show_all,
+            preview_space_reserved,
+        );
+        if pending_delete {
+            let minimum_width =
+                (310.0 * settings.deck_scale * display.work_area.logical_scale()).round() as u32;
+            if frame.width < minimum_width {
+                frame.width = minimum_width;
+                frame.x = if settings.deck_on_left_edge {
+                    display.work_area.x
+                } else {
+                    display.work_area.x + display.work_area.width as i32 - frame.width as i32
+                };
+            }
+        }
+        let hidden_count = if !fan_show_all {
+            active_notes.len().saturating_sub(MAX_VISIBLE_TABS)
+        } else {
+            0
+        };
+        let hit_test = deck_hit_test_mode_with_preview(
+            View::Deck,
+            DeckState::Fan,
+            Some(frame),
+            settings.deck_on_left_edge,
+            settings.deck_style,
+            settings.deck_scale,
+            display.work_area.logical_scale(),
+            local_notes.len(),
+            hidden_count,
+            pending_delete,
+            preview_visible,
+            preview_note_index.unwrap_or_default(),
+        );
+
+        // Preview space is reserved before hover; only the native regions need to change.
+        platform::update_hit_test(&ui.window(), hit_test);
     }
 
     fn open_note(&mut self, id: String) {
