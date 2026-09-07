@@ -377,6 +377,11 @@ export component NotyWindow inherits Window {
                     overflow: clip;
                 }
                 TouchArea {
+                    changed has-hover => {
+                        if self.has-hover {
+                            root.deck-hovered(true);
+                        }
+                    }
                     clicked => { root.note-clicked(note.id); }
                 }
                 ContextMenuArea {

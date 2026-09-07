@@ -2387,15 +2387,20 @@ fn deck_hit_test_mode(
         });
     }
 
-    // Keep the pointer attached while it crosses from the edge pill to the fan tabs.
+    // Overlap the tab edge so diagonal moves cannot fall through between tab rows.
+    let bridge_overlap = physical(6.0 * deck_scale * display_scale).min(item.width) as i32;
     let bridge_x = if left_edge {
         0
     } else {
-        item.x.saturating_add(item.width as i32)
+        item.x
+            .saturating_add(item.width as i32)
+            .saturating_sub(bridge_overlap)
     }
     .clamp(0, frame.width as i32);
     let bridge_width = if left_edge {
-        item.x.clamp(0, frame.width as i32) as u32
+        item.x
+            .saturating_add(bridge_overlap)
+            .clamp(0, frame.width as i32) as u32
     } else {
         frame.width.saturating_sub(bridge_x as u32)
     };
@@ -3172,6 +3177,8 @@ mod tests {
         assert!(mode.accepts(10, 40));
         assert!(mode.accepts(10, 380));
         assert!(mode.accepts(45, 200));
+        assert!(mode.accepts(35, 200));
+        assert!(!mode.accepts(30, 200));
         assert!(!mode.accepts(2, 200));
 
         let left_mode = deck_hit_test_mode(
@@ -3192,6 +3199,8 @@ mod tests {
             false,
         );
         assert!(left_mode.accepts(5, 200));
+        assert!(left_mode.accepts(15, 200));
+        assert!(!left_mode.accepts(20, 200));
         assert!(!left_mode.accepts(48, 200));
     }
 
